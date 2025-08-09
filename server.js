@@ -16,6 +16,7 @@ const PORT = process.env.PORT || 3000;
 // Import routes
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
+const taskRoutes = require('./routes/tasks');
 const healthRoutes = require('./routes/health');
 
 // Import middleware
@@ -51,6 +52,7 @@ if (process.env.NODE_ENV === 'development') {
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/tasks', taskRoutes);
 app.use('/api/health', healthRoutes);
 
 // Root route

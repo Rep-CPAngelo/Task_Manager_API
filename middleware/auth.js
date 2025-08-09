@@ -1,4 +1,4 @@
-const { verifyToken } = require('../utils/auth');
+const { verifyAccessToken } = require('../utils/auth');
 
 const auth = (req, res, next) => {
   // Get token from header
@@ -14,7 +14,7 @@ const auth = (req, res, next) => {
 
   try {
     // Verify token
-    const decoded = verifyToken(token);
+    const decoded = verifyAccessToken(token);
     req.user = decoded.user;
     next();
   } catch (err) {
