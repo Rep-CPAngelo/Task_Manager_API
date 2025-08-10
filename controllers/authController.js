@@ -20,7 +20,7 @@ class AuthController {
    */
   async register (req, res) {
     try {
-      const { name, email, password } = req.body;
+      const { name, email, password, role } = req.body;
 
       // Check if user already exists
       const userExists = await User.emailExists(email);
@@ -28,11 +28,12 @@ class AuthController {
         return errorResponse(res, 'User already exists', 400);
       }
 
-      // Create new user
+      // Only allow setting role if in test environment, otherwise default to 'user'
       const newUser = new User({
         name,
         email,
-        password
+        password,
+        role: process.env.NODE_ENV === 'test' ? (role || 'user') : 'user'
       });
 
       await newUser.save();

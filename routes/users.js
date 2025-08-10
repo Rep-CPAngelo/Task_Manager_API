@@ -41,6 +41,11 @@ router.post('/', auth, authorize('admin'), validate(createUserSchema), userContr
 // @access  Private
 router.put('/:id', auth, authorize('admin'), validate(userIdParamSchema, 'params'), validate(updateUserSchema), userController.updateUser);
 
+// @route   PATCH api/users/:id
+// @desc    Update user
+// @access  Private
+router.patch('/:id', auth, authorize('admin'), validate(userIdParamSchema, 'params'), validate(updateUserSchema), userController.updateUser);
+
 // @route   DELETE api/users/:id
 // @desc    Delete user
 // @access  Private

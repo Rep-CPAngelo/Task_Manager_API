@@ -23,3 +23,44 @@ Items to address after Milestone 4.
 - Use `.lean()` in list endpoints where serialization of Mongoose documents is not required.
 
 
+
+## **Testing & Quality: Full Plan**
+
+### 1. **RBAC (Role-Based Access Control) Tests**
+- **Goal:** Ensure only admins can access `/api/users/*` routes, and non-admins are restricted from unauthorized task/user actions.
+- **Actions:**
+  - Add/expand tests for:
+    - Admin-only access to user management endpoints.
+    - Non-admins cannot access, update, or delete other users or tasks they don’t own/aren’t assigned.
+    - Proper error responses (403 Forbidden, etc.) for unauthorized actions.
+
+### 2. **Enforce Jest Coverage Thresholds**
+- **Goal:** Prevent code changes that reduce test coverage below an acceptable level.
+- **Actions:**
+  - Set minimum coverage thresholds in `jest.config.js` (e.g., 80% for statements, branches, functions, lines).
+  - Optionally, add a badge to your README for visual coverage status.
+
+### 3. **Add CI (GitHub Actions) for Lint & Tests**
+- **Goal:** Automatically run linting and tests on every pull request and push to main branches.
+- **Actions:**
+  - Create a `.github/workflows/ci.yml` workflow:
+    - Install dependencies
+    - Run `npm run lint`
+    - Run `npm test` (with coverage)
+    - Fail the build if lint or tests fail
+
+---
+
+## **Step-by-Step Execution**
+
+1. **RBAC Tests**
+   - Review current test coverage for RBAC.
+   - Add/expand tests for all relevant endpoints and roles.
+
+2. **Coverage Thresholds**
+   - Update `jest.config.js` with coverage requirements.
+   - (Optional) Add a badge to the README.
+
+3. **GitHub Actions CI**
+   - Add a workflow file for automated linting and testing.
+ 
