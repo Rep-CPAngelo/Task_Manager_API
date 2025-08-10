@@ -60,6 +60,9 @@ const userSchema = new mongoose.Schema({
 // Index for better query performance
 userSchema.index({ createdAt: -1 });
 
+// Unique index on email for database-level constraint
+userSchema.index({ email: 1 }, { unique: true });
+
 // Virtual for user's full profile (excluding password)
 userSchema.virtual('profile').get(function () {
   return {

@@ -34,6 +34,15 @@ const taskSchema = new mongoose.Schema({
 
 taskSchema.index({ title: 'text', description: 'text', labels: 'text' });
 
+// Composite indexes for common filter combinations
+taskSchema.index({ isDeleted: 1, createdBy: 1, createdAt: -1 });
+taskSchema.index({ isDeleted: 1, assignedTo: 1, createdAt: -1 });
+taskSchema.index({ isDeleted: 1, status: 1, createdAt: -1 });
+taskSchema.index({ isDeleted: 1, priority: 1, createdAt: -1 });
+taskSchema.index({ isDeleted: 1, dueDate: 1, createdAt: -1 });
+taskSchema.index({ isDeleted: 1, createdBy: 1, status: 1 });
+taskSchema.index({ isDeleted: 1, assignedTo: 1, status: 1 });
+
 module.exports = mongoose.model('Task', taskSchema);
 
 

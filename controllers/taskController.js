@@ -63,7 +63,8 @@ class TaskController {
           .limit(parseInt(limit))
           .sort(sort)
           .populate('assignedTo', 'name email role')
-          .populate('createdBy', 'name email role'),
+          .populate('createdBy', 'name email role')
+          .lean(),
         Task.countDocuments(filter)
       ]);
 
@@ -262,7 +263,7 @@ class TaskController {
       }
 
       const [items, total] = await Promise.all([
-        TaskActivity.find({ task: id }).sort({ createdAt: -1 }).skip(skip).limit(limit),
+        TaskActivity.find({ task: id }).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
         TaskActivity.countDocuments({ task: id })
       ]);
 

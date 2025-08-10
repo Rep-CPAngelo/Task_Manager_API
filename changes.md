@@ -14,6 +14,29 @@ Changes:
 
 ---
 
+2025-08-10
+
+Commit: feat: Quick wins - database indexes, OpenAPI completion
+
+Changes:
+- Added unique database index on `users.email` in `models/User.js` for database-level constraint enforcement.
+- Completed OpenAPI documentation in `docs/openapi.json` with missing schemas: `LoginResponse`, `SuccessResponseTask`, `PaginatedTaskResponse`, `PaginatedActivityResponse`.
+- Added missing endpoint documentation for Health and Users endpoints with proper request/response schemas and error responses.
+- All referenced schemas now properly defined with examples and validation rules.
+
+---
+
+2025-08-10
+
+Commit: feat: DB & Performance optimizations - composite indexes and lean queries
+
+Changes:
+- Added composite indexes in `models/Task.js` for common filter combinations: `{ isDeleted, createdBy, createdAt }`, `{ isDeleted, assignedTo, createdAt }`, `{ isDeleted, status, createdAt }`, `{ isDeleted, priority, createdAt }`, `{ isDeleted, dueDate, createdAt }`, `{ isDeleted, createdBy, status }`, `{ isDeleted, assignedTo, status }`.
+- Applied `.lean()` optimization to list endpoints in `controllers/taskController.js` and `controllers/userController.js` for improved performance when serialization of Mongoose documents is not required.
+- Optimized queries in `getTasks()`, `getActivity()`, `getAllUsers()`, and `searchUsers()` methods for better performance and reduced memory usage.
+
+---
+
 2025-08-09
 
 Commit: feat: add Task CRUD, refresh tokens, Joi validation, role-based auth; implement soft delete for users and tasks

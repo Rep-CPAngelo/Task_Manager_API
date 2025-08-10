@@ -14,7 +14,7 @@ class UserController {
    */
   async getAllUsers (req, res) {
     try {
-      const users = await User.find({ isActive: true, isDeleted: false }).select('-password');
+      const users = await User.find({ isActive: true, isDeleted: false }).select('-password').lean();
 
       return successResponse(
         res,
@@ -191,7 +191,8 @@ class UserController {
         .select('-password')
         .skip(skip)
         .limit(parseInt(limit))
-        .sort({ createdAt: -1 });
+        .sort({ createdAt: -1 })
+        .lean();
 
       const total = await User.countDocuments(searchCriteria);
 
