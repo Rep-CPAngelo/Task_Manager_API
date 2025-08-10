@@ -10,7 +10,12 @@ const {
   updateTaskSchema,
   updateStatusSchema,
   taskIdParamSchema,
-  listTasksQuerySchema
+  listTasksQuerySchema,
+  addCommentSchema,
+  addAttachmentSchema,
+  addSubtaskSchema,
+  updateSubtaskSchema,
+  subtaskIdParamSchema
 } = require('../validations/taskSchemas');
 
 // Create task
@@ -30,6 +35,21 @@ router.patch('/:id/status', auth, validate(taskIdParamSchema, 'params'), validat
 
 // Delete task
 router.delete('/:id', auth, validate(taskIdParamSchema, 'params'), taskController.deleteTask);
+
+// Add comment
+router.post('/:id/comments', auth, validate(taskIdParamSchema, 'params'), validate(addCommentSchema), taskController.addComment);
+
+// Add attachment (URL-based for now)
+router.post('/:id/attachments', auth, validate(taskIdParamSchema, 'params'), validate(addAttachmentSchema), taskController.addAttachment);
+
+// Add subtask
+router.post('/:id/subtasks', auth, validate(taskIdParamSchema, 'params'), validate(addSubtaskSchema), taskController.addSubtask);
+
+// Update subtask
+router.patch('/:id/subtasks/:subId', auth, validate(subtaskIdParamSchema, 'params'), validate(updateSubtaskSchema), taskController.updateSubtask);
+
+// Activity feed
+router.get('/:id/activity', auth, validate(taskIdParamSchema, 'params'), taskController.getActivity);
 
 module.exports = router;
 

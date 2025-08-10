@@ -6,6 +6,8 @@ const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 require('express-async-errors');
 require('dotenv').config();
+const swaggerUi = require('swagger-ui-express');
+const swaggerDocument = require('./docs/openapi.json');
 
 // Import database configuration
 const database = require('./config/database');
@@ -54,6 +56,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/health', healthRoutes);
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // Root route
 app.get('/', (req, res) => {

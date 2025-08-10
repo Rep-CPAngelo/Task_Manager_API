@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
 const subtaskSchema = new mongoose.Schema({
   title: { type: String, required: true, trim: true },
   status: { type: String, enum: ['pending', 'completed'], default: 'pending' }
-}, { _id: false });
+});
 
 const commentSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },

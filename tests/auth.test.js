@@ -1,42 +1,7 @@
 const request = require('supertest');
-const mongoose = require('mongoose');
 const app = require('../server');
 
 describe('Auth Routes', () => {
-  beforeAll(async () => {
-    // Ensure database is connected for tests
-    if (mongoose.connection.readyState === 0) {
-      const testUri = process.env.MONGODB_URI || 'mongodb+srv://cpangelo0102:w692jqERQGbS0IAl@cluster0.ahi85ym.mongodb.net/test?retryWrites=true&w=majority&appName=Cluster0';
-      await mongoose.connect(testUri, {
-        dbName: 'express_boilerplate_test'
-      });
-    }
-
-    // Wait for connection to be ready
-    await mongoose.connection.asPromise();
-  });
-
-  afterAll(async () => {
-    // Clean up database connections
-    if (mongoose.connection.readyState !== 0) {
-      await mongoose.connection.close();
-    }
-  });
-
-  beforeEach(async () => {
-    // Clear users collection before each test
-    const User = require('../models/User');
-    try {
-      await User.deleteMany({});
-    } catch (error) {
-      console.error('Error clearing users collection:', error);
-      // If collection doesn't exist, create it
-      if (error.code === 26) {
-        await mongoose.connection.createCollection('users');
-      }
-    }
-  });
-
   describe('POST /api/auth/register', () => {
     it('should register a new user with valid data', async () => {
       const userData = {
@@ -91,7 +56,7 @@ describe('Auth Routes', () => {
   });
 
   describe('POST /api/auth/login', () => {
-    it('should login with valid credentials', async () => {
+    it('should login with valid credentials and return access and refresh tokens', async () => {
       // First register a user
       const userData = {
         name: 'Test User',
@@ -101,22 +66,19 @@ describe('Auth Routes', () => {
 
       await request(app)
         .post('/api/auth/register')
-        .send(userData);
+        .send(userData)
+        .expect(201);
 
       // Then try to login
-      const loginData = {
-        email: 'test@example.com',
-        password: 'password123'
-      };
-
       const response = await request(app)
         .post('/api/auth/login')
-        .send(loginData)
+        .send({ email: userData.email, password: userData.password })
         .expect(200);
 
       expect(response.body.success).toBe(true);
       expect(response.body.message).toBe('Login successful');
-      expect(response.body.data).toHaveProperty('token');
+      expect(response.body.data).toHaveProperty('accessToken');
+      expect(response.body.data).toHaveProperty('refreshToken');
       expect(response.body.data).toHaveProperty('user');
     });
 
@@ -133,6 +95,38 @@ describe('Auth Routes', () => {
 
       expect(response.body.success).toBe(false);
       expect(response.body.errors).toBeDefined();
+    });
+  });
+
+  describe('POST /api/auth/refresh and /api/auth/logout', () => {
+    it('should refresh access token and then allow logout', async () => {
+      const userData = {
+        name: 'Test User',
+        email: 'refresh@example.com',
+        password: 'password123'
+      };
+
+      await request(app).post('/api/auth/register').send(userData).expect(201);
+
+      const loginRes = await request(app)
+        .post('/api/auth/login')
+        .send({ email: userData.email, password: userData.password })
+        .expect(200);
+
+      const refreshToken = loginRes.body.data.refreshToken;
+
+      const refreshRes = await request(app)
+        .post('/api/auth/refresh')
+        .send({ refreshToken })
+        .expect(200);
+
+      expect(refreshRes.body.data).toHaveProperty('accessToken');
+      expect(refreshRes.body.data).toHaveProperty('refreshToken');
+
+      await request(app)
+        .post('/api/auth/logout')
+        .send({ refreshToken })
+        .expect(200);
     });
   });
 });

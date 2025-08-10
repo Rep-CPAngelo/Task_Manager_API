@@ -1,6 +1,7 @@
 'use strict';
 
 const Task = require('../models/Task');
+const TaskActivity = require('../models/TaskActivity');
 const { successResponse, errorResponse, paginatedResponse } = require('../utils/response');
 
 class TaskController {
@@ -19,6 +20,7 @@ class TaskController {
         attachments: attachments || [],
         createdBy: req.user.id
       });
+      await TaskActivity.create({ task: task._id, user: req.user.id, action: 'task_created', details: { title } });
       return successResponse(res, task, 'Task created successfully', 201);
     } catch (error) {
       console.error('Create task error:', error);
@@ -102,8 +104,10 @@ class TaskController {
         return errorResponse(res, 'Forbidden', 403);
       }
 
+      const before = { status: task.status, priority: task.priority };
       Object.assign(task, updates);
       await task.save();
+      await TaskActivity.create({ task: task._id, user: req.user.id, action: 'task_updated', details: { before, updates } });
       return successResponse(res, task, 'Task updated successfully');
     } catch (error) {
       console.error('Update task error:', error);
@@ -122,8 +126,10 @@ class TaskController {
         return errorResponse(res, 'Forbidden', 403);
       }
 
+      const from = task.status;
       task.status = status;
       await task.save();
+      await TaskActivity.create({ task: task._id, user: req.user.id, action: 'task_status_updated', details: { from, to: status } });
       return successResponse(res, task, 'Task status updated successfully');
     } catch (error) {
       console.error('Update task status error:', error);
@@ -145,10 +151,125 @@ class TaskController {
       task.deletedAt = new Date();
       task.deletedBy = req.user.id;
       await task.save();
+      await TaskActivity.create({ task: task._id, user: req.user.id, action: 'task_deleted' });
       return successResponse(res, null, 'Task deleted successfully (soft)');
     } catch (error) {
       console.error('Delete task error:', error);
       return errorResponse(res, 'Failed to delete task', 500);
+    }
+  }
+
+  async addComment (req, res) {
+    try {
+      const { id } = req.params;
+      const { text } = req.body;
+      const task = await Task.findById(id);
+      if (!task || task.isDeleted) return errorResponse(res, 'Task not found', 404);
+
+      if (req.user.role !== 'admin' && String(task.createdBy) !== String(req.user.id) && String(task.assignedTo) !== String(req.user.id)) {
+        return errorResponse(res, 'Forbidden', 403);
+      }
+
+      const comment = { user: req.user.id, text, createdAt: new Date() };
+      task.comments.push(comment);
+      await task.save();
+      await TaskActivity.create({ task: task._id, user: req.user.id, action: 'comment_added', details: { text } });
+      return successResponse(res, task, 'Comment added');
+    } catch (error) {
+      console.error('Add comment error:', error);
+      return errorResponse(res, 'Failed to add comment', 500);
+    }
+  }
+
+  async addAttachment (req, res) {
+    try {
+      const { id } = req.params;
+      const { url } = req.body;
+      const task = await Task.findById(id);
+      if (!task || task.isDeleted) return errorResponse(res, 'Task not found', 404);
+
+      if (req.user.role !== 'admin' && String(task.createdBy) !== String(req.user.id) && String(task.assignedTo) !== String(req.user.id)) {
+        return errorResponse(res, 'Forbidden', 403);
+      }
+
+      task.attachments.push(url);
+      await task.save();
+      await TaskActivity.create({ task: task._id, user: req.user.id, action: 'attachment_added', details: { url } });
+      return successResponse(res, task, 'Attachment added');
+    } catch (error) {
+      console.error('Add attachment error:', error);
+      return errorResponse(res, 'Failed to add attachment', 500);
+    }
+  }
+
+  async addSubtask (req, res) {
+    try {
+      const { id } = req.params;
+      const { title } = req.body;
+      const task = await Task.findById(id);
+      if (!task || task.isDeleted) return errorResponse(res, 'Task not found', 404);
+
+      if (req.user.role !== 'admin' && String(task.createdBy) !== String(req.user.id) && String(task.assignedTo) !== String(req.user.id)) {
+        return errorResponse(res, 'Forbidden', 403);
+      }
+
+      task.subtasks.push({ title, status: 'pending' });
+      await task.save();
+      await TaskActivity.create({ task: task._id, user: req.user.id, action: 'subtask_added', details: { title } });
+      return successResponse(res, task, 'Subtask added');
+    } catch (error) {
+      console.error('Add subtask error:', error);
+      return errorResponse(res, 'Failed to add subtask', 500);
+    }
+  }
+
+  async updateSubtask (req, res) {
+    try {
+      const { id, subId } = req.params;
+      const updates = req.body;
+      const task = await Task.findById(id);
+      if (!task || task.isDeleted) return errorResponse(res, 'Task not found', 404);
+
+      if (req.user.role !== 'admin' && String(task.createdBy) !== String(req.user.id) && String(task.assignedTo) !== String(req.user.id)) {
+        return errorResponse(res, 'Forbidden', 403);
+      }
+
+      const subtask = task.subtasks.id(subId);
+      if (!subtask) return errorResponse(res, 'Subtask not found', 404);
+
+      Object.assign(subtask, updates);
+      await task.save();
+      await TaskActivity.create({ task: task._id, user: req.user.id, action: 'subtask_updated', details: { subId, updates } });
+      return successResponse(res, task, 'Subtask updated');
+    } catch (error) {
+      console.error('Update subtask error:', error);
+      return errorResponse(res, 'Failed to update subtask', 500);
+    }
+  }
+
+  async getActivity (req, res) {
+    try {
+      const { id } = req.params;
+      const page = parseInt(req.query.page || '1', 10);
+      const limit = parseInt(req.query.limit || '10', 10);
+      const skip = (page - 1) * limit;
+
+      const task = await Task.findById(id);
+      if (!task || task.isDeleted) return errorResponse(res, 'Task not found', 404);
+
+      if (req.user.role !== 'admin' && String(task.createdBy) !== String(req.user.id) && String(task.assignedTo) !== String(req.user.id)) {
+        return errorResponse(res, 'Forbidden', 403);
+      }
+
+      const [items, total] = await Promise.all([
+        TaskActivity.find({ task: id }).sort({ createdAt: -1 }).skip(skip).limit(limit),
+        TaskActivity.countDocuments({ task: id })
+      ]);
+
+      return paginatedResponse(res, items, page, limit, total);
+    } catch (error) {
+      console.error('Get activity error:', error);
+      return errorResponse(res, 'Failed to fetch activity', 500);
     }
   }
 }

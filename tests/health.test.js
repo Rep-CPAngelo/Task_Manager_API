@@ -1,25 +1,7 @@
 const request = require('supertest');
-const mongoose = require('mongoose');
 const app = require('../server');
 
 describe('Health Routes', () => {
-  beforeAll(async () => {
-    // Ensure database is connected for tests
-    if (mongoose.connection.readyState === 0) {
-      const testUri = process.env.MONGODB_URI || 'mongodb+srv://cpangelo0102:w692jqERQGbS0IAl@cluster0.ahi85ym.mongodb.net/test?retryWrites=true&w=majority&appName=Cluster0';
-      await mongoose.connect(testUri, {
-        dbName: 'express_boilerplate_test'
-      });
-    }
-  });
-
-  afterAll(async () => {
-    // Clean up database connections
-    if (mongoose.connection.readyState !== 0) {
-      await mongoose.connection.close();
-    }
-  });
-
   describe('GET /api/health', () => {
     it('should return health status', async () => {
       const response = await request(app)

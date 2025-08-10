@@ -8,7 +8,10 @@
     { "key": "host_url", "value": "http://localhost:3000", "type": "string" },
     { "key": "base_url", "value": "{{host_url}}/api", "type": "string" },
     { "key": "token", "value": "", "type": "string" },
-    { "key": "user_id", "value": "", "type": "string" }
+    { "key": "refresh_token", "value": "", "type": "string" },
+    { "key": "user_id", "value": "", "type": "string" },
+    { "key": "task_id", "value": "", "type": "string" },
+    { "key": "subtask_id", "value": "", "type": "string" }
   ],
   "item": [
     {
@@ -123,10 +126,12 @@
                 "exec": [
                   "try {",
                   "  const json = pm.response.json();",
-                  "  const token = json && json.data && json.data.token;",
-                  "  if (token) {",
-                  "    pm.collectionVariables.set('token', token);",
-                  "  }",
+                  "  const access = json && json.data && json.data.accessToken;",
+                  "  const refresh = json && json.data && json.data.refreshToken;",
+                  "  const userId = json && json.data && json.data.user && (json.data.user.id || json.data.user._id);",
+                  "  if (access) pm.collectionVariables.set('token', access);",
+                  "  if (refresh) pm.collectionVariables.set('refresh_token', refresh);",
+                  "  if (userId) pm.collectionVariables.set('user_id', userId);",
                   "} catch (e) { /* ignore */ }"
                 ]
               }
@@ -201,6 +206,66 @@
               "raw": "{{base_url}}/auth/change-password",
               "host": ["{{base_url}}"],
               "path": ["auth", "change-password"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth Tokens",
+      "item": [
+        {
+          "name": "POST /api/auth/refresh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "  const json = pm.response.json();",
+                  "  const access = json && json.data && json.data.accessToken;",
+                  "  const refresh = json && json.data && json.data.refreshToken;",
+                  "  if (access) pm.collectionVariables.set('token', access);",
+                  "  if (refresh) pm.collectionVariables.set('refresh_token', refresh);",
+                  "} catch (e) { /* ignore */ }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/refresh",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "refresh"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/auth/logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "logout"]
             }
           }
         }
@@ -337,6 +402,21 @@
       "item": [
         {
           "name": "POST /api/tasks",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "  const json = pm.response.json();",
+                  "  const id = json && json.data && (json.data._id || json.data.id);",
+                  "  if (id) pm.collectionVariables.set('task_id', id);",
+                  "} catch (e) { /* ignore */ }"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -349,6 +429,78 @@
               "raw": "{\n  \"title\": \"Draft roadmap\",\n  \"description\": \"Write initial roadmap doc\",\n  \"priority\": \"high\",\n  \"dueDate\": \"2030-01-01T00:00:00.000Z\",\n  \"labels\": [\"planning\", \"docs\"]\n}"
             },
             "url": { "raw": "{{base_url}}/tasks", "host": ["{{base_url}}"], "path": ["tasks"] }
+          }
+        },
+        {
+          "name": "POST /api/tasks/:id/comments",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "x-auth-token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"text\": \"Looks good!\"\n}" },
+            "url": { "raw": "{{base_url}}/tasks/{{task_id}}/comments", "host": ["{{base_url}}"], "path": ["tasks", "{{task_id}}", "comments"] }
+          }
+        },
+        {
+          "name": "POST /api/tasks/:id/attachments",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "x-auth-token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"url\": \"https://example.com/spec.pdf\"\n}" },
+            "url": { "raw": "{{base_url}}/tasks/{{task_id}}/attachments", "host": ["{{base_url}}"], "path": ["tasks", "{{task_id}}", "attachments"] }
+          }
+        },
+        {
+          "name": "POST /api/tasks/:id/subtasks",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "  const json = pm.response.json();",
+                  "  const subs = json && json.data && json.data.subtasks;",
+                  "  const sid = subs && subs.length && subs[subs.length-1] && subs[subs.length-1]._id;",
+                  "  if (sid) pm.collectionVariables.set('subtask_id', sid);",
+                  "} catch (e) { /* ignore */ }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "x-auth-token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Draft introduction\"\n}" },
+            "url": { "raw": "{{base_url}}/tasks/{{task_id}}/subtasks", "host": ["{{base_url}}"], "path": ["tasks", "{{task_id}}", "subtasks"] }
+          }
+        },
+        {
+          "name": "PATCH /api/tasks/:id/subtasks/:subId",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "x-auth-token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"completed\"\n}" },
+            "url": { "raw": "{{base_url}}/tasks/{{task_id}}/subtasks/{{subtask_id}}", "host": ["{{base_url}}"], "path": ["tasks", "{{task_id}}", "subtasks", "{{subtask_id}}"] }
+          }
+        },
+        {
+          "name": "GET /api/tasks/:id/activity",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "x-auth-token", "value": "{{token}}" } ],
+            "url": { "raw": "{{base_url}}/tasks/{{task_id}}/activity?page=1&limit=10", "host": ["{{base_url}}"], "path": ["tasks", "{{task_id}}", "activity"], "query": [ {"key": "page", "value": "1"}, {"key": "limit", "value": "10"} ] }
           }
         },
         {

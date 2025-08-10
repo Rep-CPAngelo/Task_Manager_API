@@ -53,12 +53,39 @@ const listTasksQuerySchema = Joi.object({
   sortOrder: Joi.string().valid('asc', 'desc').default('desc')
 });
 
+const addCommentSchema = Joi.object({
+  text: Joi.string().trim().min(1).required()
+});
+
+const addAttachmentSchema = Joi.object({
+  url: Joi.string().uri().required()
+});
+
+const addSubtaskSchema = Joi.object({
+  title: Joi.string().trim().min(1).required()
+});
+
+const updateSubtaskSchema = Joi.object({
+  title: Joi.string().trim().min(1).optional(),
+  status: Joi.string().valid('pending', 'completed').optional()
+}).min(1);
+
+const subtaskIdParamSchema = Joi.object({
+  id: objectId.required(),
+  subId: objectId.required()
+});
+
 module.exports = {
   createTaskSchema,
   updateTaskSchema,
   updateStatusSchema,
   taskIdParamSchema,
-  listTasksQuerySchema
+  listTasksQuerySchema,
+  addCommentSchema,
+  addAttachmentSchema,
+  addSubtaskSchema,
+  updateSubtaskSchema,
+  subtaskIdParamSchema
 };
 
 
