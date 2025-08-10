@@ -1,8 +1,10 @@
 const { verifyAccessToken } = require('../utils/auth');
 
 const auth = (req, res, next) => {
-  // Get token from header
-  const token = req.header('x-auth-token');
+  // Get token from header (support x-auth-token and Authorization: Bearer)
+  const authHeader = req.headers['authorization'] || req.headers['Authorization'];
+  const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  const token = req.header('x-auth-token') || bearerToken;
 
   // Check if no token
   if (!token) {

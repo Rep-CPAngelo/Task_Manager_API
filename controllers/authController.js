@@ -80,15 +80,7 @@ class AuthController {
         userAgent: req.headers['user-agent'] || null
       });
 
-      return successResponse(
-        res,
-        {
-          accessToken,
-          refreshToken,
-          user
-        },
-        'Login successful'
-      );
+      return successResponse(res, { accessToken, refreshToken, user }, 'Login successful');
     } catch (error) {
       console.error('Login error:', error);
       return errorResponse(res, 'Server error', 500);

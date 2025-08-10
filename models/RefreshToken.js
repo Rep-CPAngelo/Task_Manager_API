@@ -7,7 +7,7 @@ const refreshTokenSchema = new mongoose.Schema({
   replacedByJti: { type: String, default: null },
   createdByIp: { type: String, default: null },
   userAgent: { type: String, default: null },
-  expiresAt: { type: Date, required: true, index: true }
+  expiresAt: { type: Date, required: true }
 }, {
   timestamps: true
 });
