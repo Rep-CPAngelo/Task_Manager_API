@@ -34,6 +34,20 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  isDeleted: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  deletedAt: {
+    type: Date,
+    default: null
+  },
+  deletedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
   lastLogin: {
     type: Date
   }
@@ -45,6 +59,9 @@ const userSchema = new mongoose.Schema({
 
 // Index for better query performance
 userSchema.index({ createdAt: -1 });
+
+// Unique index on email for database-level constraint
+userSchema.index({ email: 1 }, { unique: true });
 
 // Virtual for user's full profile (excluding password)
 userSchema.virtual('profile').get(function () {
@@ -125,14 +142,14 @@ userSchema.methods.getPublicProfile = function () {
  * Static method to find user by email
  */
 userSchema.statics.findByEmail = function (email) {
-  return this.findOne({ email: email.toLowerCase() });
+  return this.findOne({ email: email.toLowerCase(), isDeleted: false });
 };
 
 /**
  * Static method to check if email exists
  */
 userSchema.statics.emailExists = async function (email) {
-  const user = await this.findOne({ email: email.toLowerCase() });
+  const user = await this.findOne({ email: email.toLowerCase(), isDeleted: false });
   return !!user;
 };
 
@@ -141,8 +158,8 @@ userSchema.statics.emailExists = async function (email) {
  */
 userSchema.statics.validateCredentials = async function (email, password) {
   try {
-    const user = await this.findOne({ email: email.toLowerCase() }).select('+password');
-    if (!user || !user.isActive) {
+    const user = await this.findOne({ email: email.toLowerCase(), isDeleted: false }).select('+password');
+    if (!user || !user.isActive || user.isDeleted) {
       return null;
     }
 

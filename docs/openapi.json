@@ -1,0 +1,531 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Task Manager API",
+    "version": "1.0.0",
+    "description": "REST API for authentication, user management, and task management with comments, attachments, subtasks, and activity feed."
+  },
+  "servers": [
+    { "url": "/api" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "ApiToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-auth-token"
+      },
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": false },
+          "message": { "type": "string", "example": "Validation error" },
+          "errors": {
+            "type": "array",
+            "items": { "type": "object" }
+          }
+        }
+      },
+      "Pagination": {
+        "type": "object",
+        "properties": {
+          "page": { "type": "integer", "example": 1 },
+          "limit": { "type": "integer", "example": 10 },
+          "total": { "type": "integer", "example": 42 },
+          "totalPages": { "type": "integer", "example": 5 },
+          "hasNextPage": { "type": "boolean", "example": true },
+          "hasPrevPage": { "type": "boolean", "example": false }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "role": { "type": "string", "enum": ["user", "admin"] },
+          "isActive": { "type": "boolean" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "AuthRegisterRequest": {
+        "type": "object",
+        "required": ["name", "email", "password"],
+        "properties": {
+          "name": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string", "minLength": 6 }
+        },
+        "example": { "name": "Jane Doe", "email": "jane.doe@example.com", "password": "Password@123" }
+      },
+      "AuthLoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string" }
+        },
+        "example": { "email": "jane.doe@example.com", "password": "Password@123" }
+      },
+      "AuthLoginData": {
+        "type": "object",
+        "properties": {
+          "accessToken": { "type": "string" },
+          "refreshToken": { "type": "string" },
+          "user": { "$ref": "#/components/schemas/User" }
+        }
+      },
+      "AuthRefreshRequest": {
+        "type": "object",
+        "required": ["refreshToken"],
+        "properties": { "refreshToken": { "type": "string" } },
+        "example": { "refreshToken": "eyJhbGciOiJI..." }
+      },
+      "UpdateProfileRequest": {
+        "type": "object",
+        "required": ["name", "email"],
+        "properties": {
+          "name": { "type": "string" },
+          "email": { "type": "string", "format": "email" }
+        }
+      },
+      "ChangePasswordRequest": {
+        "type": "object",
+        "required": ["currentPassword", "newPassword"],
+        "properties": {
+          "currentPassword": { "type": "string" },
+          "newPassword": { "type": "string", "minLength": 6 }
+        }
+      },
+      "Subtask": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "title": { "type": "string" },
+          "status": { "type": "string", "enum": ["pending", "completed"] }
+        }
+      },
+      "Comment": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "user": { "type": "string" },
+          "text": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Task": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "status": { "type": "string", "enum": ["pending", "in-progress", "completed", "overdue"] },
+          "priority": { "type": "string", "enum": ["low", "medium", "high"] },
+          "dueDate": { "type": "string", "format": "date-time" },
+          "assignedTo": { "type": "string" },
+          "createdBy": { "type": "string" },
+          "labels": { "type": "array", "items": { "type": "string" } },
+          "subtasks": { "type": "array", "items": { "$ref": "#/components/schemas/Subtask" } },
+          "attachments": { "type": "array", "items": { "type": "string" } },
+          "comments": { "type": "array", "items": { "$ref": "#/components/schemas/Comment" } },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "CreateTaskRequest": {
+        "type": "object",
+        "required": ["title"],
+        "properties": {
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "status": { "type": "string", "enum": ["pending", "in-progress", "completed", "overdue"] },
+          "priority": { "type": "string", "enum": ["low", "medium", "high"] },
+          "dueDate": { "type": "string", "format": "date-time" },
+          "assignedTo": { "type": "string" },
+          "labels": { "type": "array", "items": { "type": "string" } },
+          "subtasks": { "type": "array", "items": { "$ref": "#/components/schemas/Subtask" } },
+          "attachments": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "UpdateTaskRequest": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "status": { "type": "string", "enum": ["pending", "in-progress", "completed", "overdue"] },
+          "priority": { "type": "string", "enum": ["low", "medium", "high"] },
+          "dueDate": { "type": "string", "format": "date-time" },
+          "assignedTo": { "type": "string" },
+          "labels": { "type": "array", "items": { "type": "string" } },
+          "subtasks": { "type": "array", "items": { "$ref": "#/components/schemas/Subtask" } },
+          "attachments": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "UpdateStatusRequest": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "type": "string", "enum": ["pending", "in-progress", "completed", "overdue"] }
+        }
+      },
+      "AddCommentRequest": {
+        "type": "object",
+        "required": ["text"],
+        "properties": { "text": { "type": "string" } }
+      },
+      "AddAttachmentRequest": {
+        "type": "object",
+        "required": ["url"],
+        "properties": { "url": { "type": "string", "format": "uri" } }
+      },
+      "AddSubtaskRequest": {
+        "type": "object",
+        "required": ["title"],
+        "properties": { "title": { "type": "string" } }
+      },
+      "UpdateSubtaskRequest": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "status": { "type": "string", "enum": ["pending", "completed"] }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": true },
+          "message": { "type": "string", "example": "Login successful" },
+          "data": { "$ref": "#/components/schemas/AuthLoginData" }
+        }
+      },
+      "SuccessResponseTask": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": true },
+          "message": { "type": "string", "example": "Task operation successful" },
+          "data": { "$ref": "#/components/schemas/Task" }
+        }
+      },
+      "PaginatedTaskResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": true },
+          "message": { "type": "string", "example": "Tasks retrieved successfully" },
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Task" }
+          },
+          "pagination": { "$ref": "#/components/schemas/Pagination" }
+        }
+      },
+      "PaginatedActivityResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": true },
+          "message": { "type": "string", "example": "Activity retrieved successfully" },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "_id": { "type": "string" },
+                "action": { "type": "string", "enum": ["create", "update", "delete", "status", "comment", "attachment", "subtask_add", "subtask_update"] },
+                "description": { "type": "string" },
+                "user": { "type": "string" },
+                "createdAt": { "type": "string", "format": "date-time" }
+              }
+            }
+          },
+          "pagination": { "$ref": "#/components/schemas/Pagination" }
+        }
+      }
+    }
+  },
+  "security": [
+    { "ApiToken": [] },
+    { "BearerAuth": [] }
+  ],
+  "paths": {
+    "/auth/register": {
+      "post": {
+        "summary": "Register",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "email", "password"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string", "minLength": 6 }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "Login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginResponse" } } }
+          }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "summary": "Refresh token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["refreshToken"],
+                "properties": {
+                  "refreshToken": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/tasks": {
+      "get": {
+        "summary": "List tasks",
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 10 } },
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["pending", "in-progress", "completed", "overdue"] } },
+          { "name": "priority", "in": "query", "schema": { "type": "string", "enum": ["low", "medium", "high"] } },
+          { "name": "q", "in": "query", "schema": { "type": "string" } },
+          { "name": "assignedTo", "in": "query", "schema": { "type": "string" } },
+          { "name": "createdBy", "in": "query", "schema": { "type": "string" } },
+          { "name": "dueFrom", "in": "query", "schema": { "type": "string", "format": "date-time" } },
+          { "name": "dueTo", "in": "query", "schema": { "type": "string", "format": "date-time" } },
+          { "name": "sortBy", "in": "query", "schema": { "type": "string", "enum": ["createdAt", "updatedAt", "dueDate", "priority", "status"], "default": "createdAt" } },
+          { "name": "sortOrder", "in": "query", "schema": { "type": "string", "enum": ["asc", "desc"], "default": "desc" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaginatedTaskResponse" } } }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create task",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateTaskRequest" } } }
+        },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponseTask" } } } },
+          "400": { "description": "Bad Request", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/tasks/{id}": {
+      "get": { "summary": "Get task", "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponseTask" } } } }, "404": { "description": "Not Found" } } },
+      "patch": { "summary": "Update task", "requestBody": {"required": true, "content": {"application/json": {"schema": { "$ref": "#/components/schemas/UpdateTaskRequest" }}}}, "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponseTask" } } } } } },
+      "delete": { "summary": "Delete task", "responses": { "200": { "description": "OK" } } },
+      "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } } ]
+    },
+    "/tasks/{id}/status": { "patch": { "summary": "Update task status", "requestBody": {"required": true, "content": {"application/json": {"schema": { "$ref": "#/components/schemas/UpdateStatusRequest" }}}}, "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponseTask" } } } } }, "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } } ] } },
+    "/tasks/{id}/comments": { "post": { "summary": "Add comment", "requestBody": {"required": true, "content": {"application/json": {"schema": { "$ref": "#/components/schemas/AddCommentRequest" }}}}, "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponseTask" } } } } }, "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } } ] } },
+    "/tasks/{id}/attachments": { "post": { "summary": "Add attachment (URL)", "requestBody": {"required": true, "content": {"application/json": {"schema": { "$ref": "#/components/schemas/AddAttachmentRequest" }}}}, "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponseTask" } } } } }, "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } } ] } },
+    "/tasks/{id}/subtasks": { "post": { "summary": "Add subtask", "requestBody": {"required": true, "content": {"application/json": {"schema": { "$ref": "#/components/schemas/AddSubtaskRequest" }}}}, "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponseTask" } } } } }, "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } } ] } },
+    "/tasks/{id}/subtasks/{subId}": { "patch": { "summary": "Update subtask", "requestBody": {"required": true, "content": {"application/json": {"schema": { "$ref": "#/components/schemas/UpdateSubtaskRequest" }}}}, "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponseTask" } } } } }, "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "subId", "in": "path", "required": true, "schema": { "type": "string" } } ] } },
+    "/tasks/{id}/activity": { "get": { "summary": "Task activity feed", "parameters": [ { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } }, { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 10 } }, { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } } ], "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaginatedActivityResponse" } } } } } } },
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "message": { "type": "string", "example": "Server is healthy" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "status": { "type": "string", "example": "healthy" },
+                        "timestamp": { "type": "string", "format": "date-time" },
+                        "uptime": { "type": "number", "example": 123.45 }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users": {
+      "get": {
+        "summary": "List users (Admin only)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 10 } },
+          { "name": "role", "in": "query", "schema": { "type": "string", "enum": ["user", "admin"] } },
+          { "name": "isActive", "in": "query", "schema": { "type": "boolean" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "message": { "type": "string", "example": "Users retrieved successfully" },
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/User" }
+                    },
+                    "pagination": { "$ref": "#/components/schemas/Pagination" }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/users/profile": {
+      "get": {
+        "summary": "Get user profile",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "message": { "type": "string", "example": "Profile retrieved successfully" },
+                    "data": { "$ref": "#/components/schemas/User" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update user profile",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateProfileRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "message": { "type": "string", "example": "Profile updated successfully" },
+                    "data": { "$ref": "#/components/schemas/User" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/users/change-password": {
+      "post": {
+        "summary": "Change password",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ChangePasswordRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "message": { "type": "string", "example": "Password changed successfully" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    }
+  }
+}
+

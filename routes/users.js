@@ -1,63 +1,49 @@
 const express = require('express');
-const { body, validationResult } = require('express-validator');
+const validate = require('../middleware/validate');
+const {
+  createUserSchema,
+  updateUserSchema,
+  userIdParamSchema,
+  searchUsersQuerySchema
+} = require('../validations/userSchemas');
 const userController = require('../controllers/userController');
 const auth = require('../middleware/auth');
+const authorize = require('../middleware/authorize');
 const router = express.Router();
-
-// Validation middleware
-const validateRequest = (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({
-      success: false,
-      errors: errors.array()
-    });
-  }
-  next();
-};
 
 // @route   GET api/users
 // @desc    Get all users
 // @access  Private
-router.get('/', auth, userController.getAllUsers);
+router.get('/', auth, authorize('admin'), userController.getAllUsers);
 
 // @route   GET api/users/search
 // @desc    Search users
 // @access  Private
-router.get('/search', auth, userController.searchUsers);
+router.get('/search', auth, authorize('admin'), validate(searchUsersQuerySchema, 'query'), userController.searchUsers);
 
 // @route   GET api/users/stats
 // @desc    Get user statistics
 // @access  Private
-router.get('/stats', auth, userController.getUserStats);
+router.get('/stats', auth, authorize('admin'), userController.getUserStats);
 
 // @route   GET api/users/:id
 // @desc    Get user by ID
 // @access  Private
-router.get('/:id', auth, userController.getUserById);
+router.get('/:id', auth, authorize('admin'), validate(userIdParamSchema, 'params'), userController.getUserById);
 
 // @route   POST api/users
 // @desc    Create a new user
 // @access  Private
-router.post('/', [
-  auth,
-  body('name', 'Name is required').not().isEmpty().trim(),
-  body('email', 'Please include a valid email').isEmail().normalizeEmail(),
-  body('password', 'Password must be at least 6 characters').isLength({ min: 6 })
-], validateRequest, userController.createUser);
+router.post('/', auth, authorize('admin'), validate(createUserSchema), userController.createUser);
 
 // @route   PUT api/users/:id
 // @desc    Update user
 // @access  Private
-router.put('/:id', [
-  auth,
-  body('name', 'Name is required').not().isEmpty().trim(),
-  body('email', 'Please include a valid email').isEmail().normalizeEmail()
-], validateRequest, userController.updateUser);
+router.put('/:id', auth, authorize('admin'), validate(userIdParamSchema, 'params'), validate(updateUserSchema), userController.updateUser);
 
 // @route   DELETE api/users/:id
 // @desc    Delete user
 // @access  Private
-router.delete('/:id', auth, userController.deleteUser);
+router.delete('/:id', auth, authorize('admin'), userController.deleteUser);
 
 module.exports = router;

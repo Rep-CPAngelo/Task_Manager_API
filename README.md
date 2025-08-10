@@ -128,7 +128,9 @@ This boilerplate uses MongoDB with Mongoose ODM:
 
 ### Authentication
 - `POST /api/auth/register` - Register a new user
-- `POST /api/auth/login` - Login user
+- `POST /api/auth/login` - Login user (returns `accessToken` and `refreshToken`)
+- `POST /api/auth/refresh` - Refresh access token (rotates refresh token)
+- `POST /api/auth/logout` - Logout and revoke refresh token
 - `GET /api/auth/profile` - Get current user profile (Protected)
 - `PUT /api/auth/profile` - Update current user profile (Protected)
 - `PUT /api/auth/change-password` - Change user password (Protected)
@@ -147,6 +149,45 @@ This boilerplate uses MongoDB with Mongoose ODM:
 - `GET /api/health/status` - Detailed health status
 - `GET /api/health/system` - System information
 - `GET /api/health/database` - Database health check
+
+### Tasks
+- `POST /api/tasks` - Create task
+- `GET /api/tasks` - List tasks (pagination, filtering, search, sorting)
+- `GET /api/tasks/:id` - Get a task
+- `PATCH /api/tasks/:id` - Update a task
+- `PATCH /api/tasks/:id/status` - Update task status
+- `DELETE /api/tasks/:id` - Soft delete a task
+- `POST /api/tasks/:id/comments` - Add a comment
+- `POST /api/tasks/:id/attachments` - Add an attachment by URL
+- `POST /api/tasks/:id/subtasks` - Add a subtask
+- `PATCH /api/tasks/:id/subtasks/:subId` - Update a subtask
+- `GET /api/tasks/:id/activity` - Paginated task activity feed
+
+## 📘 API Docs and Postman
+
+- Swagger UI is available at `/api/docs` when the server is running.
+
+- A ready-to-use Postman collection is provided at `postman/Task_Manager_API.postman_collection.json`.
+
+How to use the collection:
+
+1. Import the collection into Postman.
+2. Variables used by the collection:
+   - `host_url`: defaults to `http://localhost:3000`
+   - `base_url`: computed as `{{host_url}}/api`
+   - `token`: access token, auto-set after login/refresh
+   - `refresh_token`: refresh token, auto-set after login/refresh
+   - `user_id`: auto-set from login user
+   - `task_id`: auto-set after creating a task
+   - `subtask_id`: auto-set after creating a subtask
+3. Run `Auth > POST /api/auth/login` to populate `token` and `refresh_token`.
+4. Subsequent protected requests automatically include `x-auth-token: {{token}}`.
+5. Use `Auth Tokens > POST /api/auth/refresh` to rotate and update tokens.
+6. Use `Auth Tokens > POST /api/auth/logout` to revoke the current refresh token.
+7. Typical Tasks flow:
+   - Create task → `task_id` is stored
+   - Add subtask → `subtask_id` is stored
+   - Update subtask/status, add comment/attachment, view activity → variables are used automatically
 
 ## 🔒 Security Features
 

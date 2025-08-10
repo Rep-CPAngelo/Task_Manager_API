@@ -5,12 +5,10 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
-/**
- * Generate JWT token
- * @param {Object} user - User object
- * @returns {string} JWT token
- */
-const generateToken = (user) => {
+const crypto = require('crypto');
+
+// Access token
+const generateAccessToken = (user) => {
   try {
     const payload = {
       user: {
@@ -20,31 +18,53 @@ const generateToken = (user) => {
         role: user.role
       }
     };
-
     return jwt.sign(
       payload,
       process.env.JWT_SECRET || 'your_jwt_secret_key_here',
-      { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
+      { expiresIn: process.env.JWT_EXPIRES_IN || '15m' }
     );
   } catch (error) {
-    console.error('Token generation error:', error);
-    throw new Error('Failed to generate token');
+    console.error('Access token generation error:', error);
+    throw new Error('Failed to generate access token');
   }
 };
 
-/**
- * Verify JWT token
- * @param {string} token - JWT token
- * @returns {Object} Decoded token payload
- */
-const verifyToken = (token) => {
+const verifyAccessToken = (token) => {
+  try {
+    return jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key_here');
+  } catch (error) {
+    console.error('Access token verification error:', error);
+    throw new Error('Invalid token');
+  }
+};
+
+// Refresh token (JWT with jti)
+const generateRefreshToken = (userId) => {
+  try {
+    const jti = crypto.randomUUID();
+    const payload = { sub: String(userId), jti };
+    const token = jwt.sign(
+      payload,
+      process.env.JWT_REFRESH_SECRET || (process.env.JWT_SECRET || 'your_jwt_secret_key_here') + '_refresh',
+      { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' }
+    );
+    const decoded = jwt.decode(token);
+    const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    return { token, jti, expiresAt };
+  } catch (error) {
+    console.error('Refresh token generation error:', error);
+    throw new Error('Failed to generate refresh token');
+  }
+};
+
+const verifyRefreshToken = (token) => {
   try {
     return jwt.verify(
       token,
-      process.env.JWT_SECRET || 'your_jwt_secret_key_here'
+      process.env.JWT_REFRESH_SECRET || (process.env.JWT_SECRET || 'your_jwt_secret_key_here') + '_refresh'
     );
   } catch (error) {
-    console.error('Token verification error:', error);
+    console.error('Refresh token verification error:', error);
     throw new Error('Invalid token');
   }
 };
@@ -78,8 +98,14 @@ const comparePassword = async (password, hashedPassword) => {
 };
 
 module.exports = {
-  generateToken,
-  verifyToken,
+  // Backwards compatibility
+  generateToken: generateAccessToken,
+  verifyToken: verifyAccessToken,
+  // New explicit exports
+  generateAccessToken,
+  verifyAccessToken,
+  generateRefreshToken,
+  verifyRefreshToken,
   hashPassword,
   comparePassword
 };

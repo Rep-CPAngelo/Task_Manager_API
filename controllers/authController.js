@@ -4,7 +4,12 @@
  */
 
 const User = require('../models/User');
-const { generateToken } = require('../utils/auth');
+const RefreshToken = require('../models/RefreshToken');
+const {
+  generateAccessToken,
+  generateRefreshToken,
+  verifyRefreshToken
+} = require('../utils/auth');
 const { successResponse, errorResponse } = require('../utils/response');
 
 class AuthController {
@@ -62,17 +67,20 @@ class AuthController {
         return errorResponse(res, 'Invalid credentials', 401);
       }
 
-      // Generate JWT token
-      const token = generateToken(user);
+      // Generate tokens
+      const accessToken = generateAccessToken(user);
+      const { token: refreshToken, jti, expiresAt } = generateRefreshToken(user.id || user._id);
 
-      return successResponse(
-        res,
-        {
-          token,
-          user
-        },
-        'Login successful'
-      );
+      // Persist refresh token metadata
+      await RefreshToken.create({
+        user: user.id || user._id,
+        jti,
+        expiresAt,
+        createdByIp: req.ip,
+        userAgent: req.headers['user-agent'] || null
+      });
+
+      return successResponse(res, { accessToken, refreshToken, user }, 'Login successful');
     } catch (error) {
       console.error('Login error:', error);
       return errorResponse(res, 'Server error', 500);
@@ -173,6 +181,82 @@ class AuthController {
       return errorResponse(res, 'Server error', 500);
     }
   }
+
+  /**
+   * Refresh access token
+   */
+  async refresh (req, res) {
+    try {
+      const { refreshToken } = req.body;
+      if (!refreshToken) {
+        return errorResponse(res, 'Refresh token is required', 400);
+      }
+
+      // Validate refresh token signature and payload
+      const decoded = verifyRefreshToken(refreshToken);
+      const { jti, sub } = decoded;
+
+      // Check token record
+      const tokenRecord = await RefreshToken.findOne({ jti, user: sub });
+      if (!tokenRecord || tokenRecord.revoked || tokenRecord.expiresAt < new Date()) {
+        return errorResponse(res, 'Invalid or expired refresh token', 401);
+      }
+
+      // Rotate refresh token: revoke old and create new
+      tokenRecord.revoked = true;
+      const { token: newRefreshToken, jti: newJti, expiresAt: newExpiresAt } = generateRefreshToken(sub);
+      tokenRecord.replacedByJti = newJti;
+      await tokenRecord.save();
+
+      await RefreshToken.create({
+        user: sub,
+        jti: newJti,
+        expiresAt: newExpiresAt,
+        createdByIp: req.ip,
+        userAgent: req.headers['user-agent'] || null
+      });
+
+      // Issue new access token
+      const user = await User.findById(sub);
+      if (!user || !user.isActive) {
+        return errorResponse(res, 'User not found or inactive', 404);
+      }
+      const accessToken = generateAccessToken(user);
+
+      return successResponse(res, {
+        accessToken,
+        refreshToken: newRefreshToken
+      }, 'Token refreshed');
+    } catch (error) {
+      console.error('Refresh token error:', error);
+      return errorResponse(res, 'Invalid refresh token', 401);
+    }
+  }
+
+  /**
+   * Logout: revoke current refresh token
+   */
+  async logout (req, res) {
+    try {
+      const { refreshToken } = req.body;
+      if (!refreshToken) {
+        return errorResponse(res, 'Refresh token is required', 400);
+      }
+      const decoded = verifyRefreshToken(refreshToken);
+      const { jti, sub } = decoded;
+      const tokenRecord = await RefreshToken.findOne({ jti, user: sub });
+      if (!tokenRecord) {
+        return successResponse(res, null, 'Logged out');
+      }
+      tokenRecord.revoked = true;
+      await tokenRecord.save();
+      return successResponse(res, null, 'Logged out');
+    } catch (error) {
+      console.error('Logout error:', error);
+      return errorResponse(res, 'Failed to logout', 400);
+    }
+  }
 }
 
 module.exports = new AuthController();
+ 

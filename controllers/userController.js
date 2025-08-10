@@ -14,7 +14,7 @@ class UserController {
    */
   async getAllUsers (req, res) {
     try {
-      const users = await User.find({ isActive: true }).select('-password');
+      const users = await User.find({ isActive: true, isDeleted: false }).select('-password').lean();
 
       return successResponse(
         res,
@@ -40,7 +40,7 @@ class UserController {
       const userId = req.params.id;
       const user = await User.findById(userId).select('-password');
 
-      if (!user) {
+      if (!user || user.isDeleted) {
         return errorResponse(res, 'User not found', 404);
       }
 
@@ -102,7 +102,7 @@ class UserController {
       const { name, email, role, isActive } = req.body;
 
       const user = await User.findById(userId);
-      if (!user) {
+      if (!user || user.isDeleted) {
         return errorResponse(res, 'User not found', 404);
       }
 
@@ -142,15 +142,18 @@ class UserController {
       const userId = req.params.id;
       const user = await User.findById(userId);
 
-      if (!user) {
+      if (!user || user.isDeleted) {
         return errorResponse(res, 'User not found', 404);
       }
 
-      // Soft delete - set isActive to false
+      // Soft delete
       user.isActive = false;
+      user.isDeleted = true;
+      user.deletedAt = new Date();
+      user.deletedBy = req.user.id;
       await user.save();
 
-      return successResponse(res, null, 'User deleted successfully');
+      return successResponse(res, null, 'User deleted successfully (soft)');
     } catch (error) {
       console.error('Delete user error:', error);
       return errorResponse(res, 'Failed to delete user', 500);
@@ -167,7 +170,7 @@ class UserController {
       const { query, page = 1, limit = 10, role } = req.query;
 
       // Build search criteria
-      const searchCriteria = { isActive: true };
+      const searchCriteria = { isActive: true, isDeleted: false };
 
       if (query) {
         searchCriteria.$or = [
@@ -188,7 +191,8 @@ class UserController {
         .select('-password')
         .skip(skip)
         .limit(parseInt(limit))
-        .sort({ createdAt: -1 });
+        .sort({ createdAt: -1 })
+        .lean();
 
       const total = await User.countDocuments(searchCriteria);
 
