@@ -5,11 +5,12 @@ This guide provides practical examples for common use cases with the Task Manage
 ## Table of Contents
 
 1. [Authentication Workflow](#authentication-workflow)
-2. [Task Management Examples](#task-management-examples)
-3. [Board Management Examples](#board-management-examples)
-4. [Team Collaboration Examples](#team-collaboration-examples)
-5. [Analytics and Reporting](#analytics-and-reporting)
-6. [Integration Scenarios](#integration-scenarios)
+2. [WebSocket Real-time Features](#websocket-real-time-features)
+3. [Task Management Examples](#task-management-examples)
+4. [Board Management Examples](#board-management-examples)
+5. [Team Collaboration Examples](#team-collaboration-examples)
+6. [Analytics and Reporting](#analytics-and-reporting)
+7. [Integration Scenarios](#integration-scenarios)
 
 ## Authentication Workflow
 
@@ -54,6 +55,367 @@ const refreshResponse = await fetch('/api/auth/refresh', {
   body: JSON.stringify({ refreshToken })
 });
 ```
+
+## WebSocket Real-time Features
+
+### Setting Up WebSocket Connection
+
+```javascript
+import { io } from 'socket.io-client';
+
+// Initialize WebSocket connection with authentication
+const token = localStorage.getItem('authToken');
+const socket = io('http://localhost:3000', {
+  auth: { token }
+});
+
+// Listen for connection events
+socket.on('connected', (data) => {
+  console.log('Connected to real-time updates:', data);
+});
+
+socket.on('connect_error', (error) => {
+  console.error('WebSocket connection failed:', error.message);
+});
+```
+
+### Real-time Task Collaboration
+
+```javascript
+// Join a task room to receive real-time updates
+socket.emit('join_task', 'task-id-123');
+
+// Listen for task updates
+socket.on('task_updated', (event) => {
+  switch (event.update.type) {
+    case 'task_created':
+      addTaskToInterface(event.update.task);
+      break;
+
+    case 'task_updated':
+      updateTaskInInterface(event.update.task, event.update.changes);
+      break;
+
+    case 'task_status_updated':
+      updateTaskStatus(event.taskId, event.update.statusChange);
+      break;
+
+    case 'comment_added':
+      addCommentToTask(event.taskId, event.update.comment);
+      break;
+  }
+});
+
+// Implement typing indicators
+let typingTimer;
+const taskDescriptionField = document.getElementById('task-description');
+
+taskDescriptionField.addEventListener('input', () => {
+  socket.emit('typing_start', {
+    taskId: 'task-id-123',
+    field: 'description'
+  });
+
+  clearTimeout(typingTimer);
+  typingTimer = setTimeout(() => {
+    socket.emit('typing_stop', {
+      taskId: 'task-id-123',
+      field: 'description'
+    });
+  }, 2000);
+});
+
+// Listen for other users typing
+socket.on('user_typing', (data) => {
+  showTypingIndicator(`${data.userName} is typing...`);
+});
+
+socket.on('user_stopped_typing', (data) => {
+  hideTypingIndicator(data.userId);
+});
+```
+
+### Real-time Board Synchronization
+
+```javascript
+// Join a board room for live collaboration
+socket.emit('join_board', 'board-id-456');
+
+// Listen for board updates
+socket.on('board_updated', (event) => {
+  switch (event.update.type) {
+    case 'task_added':
+      addTaskToBoard(event.boardId, event.update.taskId);
+      break;
+
+    case 'task_removed':
+      removeTaskFromBoard(event.boardId, event.update.taskId);
+      break;
+
+    case 'column_added':
+      addColumnToBoard(event.boardId, event.update.column);
+      break;
+
+    case 'column_removed':
+      removeColumnFromBoard(event.boardId, event.update.columnId);
+      break;
+  }
+});
+
+// Live drag-and-drop synchronization
+function onTaskDrop(taskId, newColumnId, newPosition) {
+  // Update UI optimistically
+  updateTaskPositionInUI(taskId, newColumnId, newPosition);
+
+  // Send API request
+  fetch(`/api/tasks/${taskId}`, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      columnId: newColumnId,
+      position: newPosition
+    })
+  });
+
+  // Real-time update will be received via WebSocket
+  // and will sync the change to all other connected users
+}
+```
+
+### Instant Notifications
+
+```javascript
+// Listen for real-time notifications
+socket.on('notification', (notification) => {
+  // Display notification to user
+  showNotificationToast(notification.title, notification.message);
+
+  // Update notification badge
+  updateNotificationBadge();
+
+  // Add to notification center
+  addToNotificationCenter(notification);
+
+  // Handle different notification types
+  switch (notification.type) {
+    case 'task_assigned':
+      highlightAssignedTask(notification.relatedTask);
+      break;
+
+    case 'task_due_soon':
+      showDueDateWarning(notification.relatedTask);
+      break;
+
+    case 'task_completed':
+      celebrateTaskCompletion(notification.relatedTask);
+      break;
+  }
+});
+
+// Example notification display function
+function showNotificationToast(title, message) {
+  const toast = document.createElement('div');
+  toast.className = 'notification-toast';
+  toast.innerHTML = `
+    <h4>${title}</h4>
+    <p>${message}</p>
+  `;
+  document.body.appendChild(toast);
+
+  // Auto-remove after 5 seconds
+  setTimeout(() => {
+    toast.remove();
+  }, 5000);
+}
+```
+
+### React Hook for WebSocket Integration
+
+```javascript
+// hooks/useWebSocket.js
+import { useEffect, useRef, useState } from 'react';
+import { io } from 'socket.io-client';
+
+export function useWebSocket(token) {
+  const socket = useRef(null);
+  const [connected, setConnected] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+
+  useEffect(() => {
+    if (token) {
+      socket.current = io('http://localhost:3000', {
+        auth: { token }
+      });
+
+      socket.current.on('connect', () => {
+        setConnected(true);
+      });
+
+      socket.current.on('disconnect', () => {
+        setConnected(false);
+      });
+
+      socket.current.on('notification', (notification) => {
+        setNotifications(prev => [notification, ...prev]);
+      });
+
+      return () => {
+        if (socket.current) {
+          socket.current.disconnect();
+        }
+      };
+    }
+  }, [token]);
+
+  const joinBoard = (boardId) => {
+    socket.current?.emit('join_board', boardId);
+  };
+
+  const joinTask = (taskId) => {
+    socket.current?.emit('join_task', taskId);
+  };
+
+  const startTyping = (taskId, field) => {
+    socket.current?.emit('typing_start', { taskId, field });
+  };
+
+  const stopTyping = (taskId, field) => {
+    socket.current?.emit('typing_stop', { taskId, field });
+  };
+
+  return {
+    socket: socket.current,
+    connected,
+    notifications,
+    joinBoard,
+    joinTask,
+    startTyping,
+    stopTyping
+  };
+}
+
+// Usage in component
+function TaskBoard({ boardId }) {
+  const { socket, connected, joinBoard } = useWebSocket(localStorage.getItem('token'));
+  const [tasks, setTasks] = useState([]);
+
+  useEffect(() => {
+    if (connected && boardId) {
+      joinBoard(boardId);
+    }
+  }, [connected, boardId, joinBoard]);
+
+  useEffect(() => {
+    if (socket) {
+      socket.on('task_updated', (event) => {
+        // Update tasks state based on event
+        handleTaskUpdate(event);
+      });
+
+      socket.on('board_updated', (event) => {
+        // Update board state based on event
+        handleBoardUpdate(event);
+      });
+
+      return () => {
+        socket.off('task_updated');
+        socket.off('board_updated');
+      };
+    }
+  }, [socket]);
+
+  const handleTaskUpdate = (event) => {
+    setTasks(prevTasks => {
+      switch (event.update.type) {
+        case 'task_created':
+          return [...prevTasks, event.update.task];
+        case 'task_updated':
+          return prevTasks.map(task =>
+            task._id === event.taskId ? { ...task, ...event.update.changes } : task
+          );
+        case 'task_deleted':
+          return prevTasks.filter(task => task._id !== event.taskId);
+        default:
+          return prevTasks;
+      }
+    });
+  };
+
+  return (
+    <div className="task-board">
+      <div className="connection-status">
+        {connected ? '🟢 Connected' : '🔴 Disconnected'}
+      </div>
+      {/* Board UI */}
+    </div>
+  );
+}
+```
+
+### Mobile Real-time Integration
+
+```javascript
+// React Native WebSocket integration
+import io from 'socket.io-client';
+import PushNotification from 'react-native-push-notification';
+
+class MobileTaskManager {
+  constructor(token) {
+    this.socket = io('http://localhost:3000', {
+      auth: { token },
+      transports: ['websocket', 'polling']
+    });
+
+    this.setupMobileListeners();
+  }
+
+  setupMobileListeners() {
+    // Handle background notifications
+    this.socket.on('notification', (notification) => {
+      // Show push notification even when app is backgrounded
+      PushNotification.localNotification({
+        title: notification.title,
+        message: notification.message,
+        userInfo: {
+          notificationId: notification.id,
+          taskId: notification.relatedTask
+        }
+      });
+
+      // Update app badge
+      PushNotification.setApplicationIconBadgeNumber(
+        this.getUnreadNotificationCount() + 1
+      );
+    });
+
+    // Handle real-time task updates
+    this.socket.on('task_updated', (event) => {
+      // Update Redux store or local state
+      store.dispatch(updateTask(event));
+
+      // Show in-app notification if app is active
+      if (AppState.currentState === 'active') {
+        this.showInAppNotification(event);
+      }
+    });
+  }
+
+  showInAppNotification(event) {
+    // Use react-native-flash-message or similar
+    showMessage({
+      message: 'Task Updated',
+      description: `${event.update.task?.title} has been updated`,
+      type: 'info',
+      duration: 3000
+    });
+  }
+}
+```
+
+For complete WebSocket API documentation, see [WEBSOCKET_API.md](./WEBSOCKET_API.md).
 
 ## Task Management Examples
 

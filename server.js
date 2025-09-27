@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
+const { createServer } = require('http');
 require('express-async-errors');
 require('dotenv').config();
 const swaggerUi = require('swagger-ui-express');
@@ -14,8 +15,10 @@ const database = require('./config/database');
 
 // Import services
 const cronService = require('./services/cronService');
+const websocketService = require('./services/websocketService');
 
 const app = express();
+const httpServer = createServer(app);
 const PORT = process.env.PORT || 3000;
 
 // Import routes
@@ -95,14 +98,19 @@ const startServer = async () => {
     // Start cron service for recurring tasks
     cronService.start();
 
+    // Initialize WebSocket service
+    websocketService.initialize(httpServer);
+
     // Start the server
-    app.listen(PORT, () => {
+    httpServer.listen(PORT, () => {
       console.log(`🚀 Server is running on port ${PORT}`);
       console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🔗 API Base URL: http://localhost:${PORT}/api`);
+      console.log(`🔌 WebSocket URL: ws://localhost:${PORT}`);
       console.log('🏗️  Architecture: MVC');
       console.log('🗄️  Database: MongoDB');
       console.log('⏰ Cron Service: Running');
+      console.log('🔄 Real-time Updates: Enabled');
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
@@ -128,4 +136,4 @@ if (require.main === module) {
   startServer();
 }
 
-module.exports = app;
+module.exports = { app, httpServer };

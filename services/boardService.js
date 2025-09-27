@@ -4,6 +4,7 @@ const Board = require('../models/Board');
 const Task = require('../models/Task');
 const User = require('../models/User');
 const mongoose = require('mongoose');
+const websocketService = require('./websocketService');
 
 class BoardService {
   /**
@@ -42,6 +43,16 @@ class BoardService {
         { path: 'owner', select: 'username email' },
         { path: 'members.user', select: 'username email' }
       ]);
+
+      // Emit real-time board creation event
+      try {
+        websocketService.emitBoardUpdate(board._id.toString(), {
+          type: 'board_created',
+          board: board
+        }, userId);
+      } catch (error) {
+        console.error('Failed to emit board creation event:', error);
+      }
 
       return {
         success: true,
@@ -366,6 +377,17 @@ class BoardService {
 
     await board.addColumn(columnData);
 
+    // Emit real-time column added event
+    try {
+      websocketService.emitBoardUpdate(boardId, {
+        type: 'column_added',
+        board: board,
+        column: columnData
+      }, userId);
+    } catch (error) {
+      console.error('Failed to emit column added event:', error);
+    }
+
     return {
       success: true,
       data: board,
@@ -465,6 +487,17 @@ class BoardService {
 
       await board.removeColumn(columnId);
       await session.commitTransaction();
+
+      // Emit real-time column removed event
+      try {
+        websocketService.emitBoardUpdate(boardId, {
+          type: 'column_removed',
+          board: board,
+          columnId: columnId
+        }, userId);
+      } catch (error) {
+        console.error('Failed to emit column removed event:', error);
+      }
 
       return {
         success: true,

@@ -3,6 +3,7 @@
 const Task = require('../models/Task');
 const TaskActivity = require('../models/TaskActivity');
 const notificationService = require('./notificationService');
+const websocketService = require('./websocketService');
 
 class TaskService {
   /**
@@ -13,6 +14,25 @@ class TaskService {
   async createTask(taskData) {
     const task = await Task.create(taskData);
     await this.createActivity(task._id, taskData.createdBy, 'task_created', { title: task.title });
+
+    // Emit real-time task creation event
+    try {
+      websocketService.emitTaskUpdate(task._id.toString(), {
+        type: 'task_created',
+        task: await task.populate(['createdBy', 'assignedTo', 'board'])
+      }, taskData.createdBy);
+
+      // Emit board update if task belongs to a board
+      if (task.board) {
+        websocketService.emitBoardUpdate(task.board.toString(), {
+          type: 'task_added',
+          taskId: task._id.toString(),
+          task: task
+        }, taskData.createdBy);
+      }
+    } catch (error) {
+      console.error('Failed to emit task creation events:', error);
+    }
 
     // Schedule due date notifications if task has due date and assignee
     if (task.dueDate && task.assignedTo) {
@@ -118,6 +138,27 @@ class TaskService {
       }
     }
 
+    // Emit real-time task update event
+    try {
+      websocketService.emitTaskUpdate(taskId, {
+        type: 'task_updated',
+        task: await task.populate(['createdBy', 'assignedTo', 'board']),
+        changes: updates,
+        previousValues: before
+      }, userId);
+
+      // Emit board update if task belongs to a board
+      if (task.board) {
+        websocketService.emitBoardUpdate(task.board.toString(), {
+          type: 'task_updated',
+          taskId: taskId,
+          changes: updates
+        }, userId);
+      }
+    } catch (error) {
+      console.error('Failed to emit task update events:', error);
+    }
+
     return task;
   }
 
@@ -163,6 +204,26 @@ class TaskService {
       }
     }
 
+    // Emit real-time status update event
+    try {
+      websocketService.emitTaskUpdate(taskId, {
+        type: 'task_status_updated',
+        task: await task.populate(['createdBy', 'assignedTo', 'board']),
+        statusChange: { from, to: status }
+      }, userId);
+
+      // Emit board update if task belongs to a board
+      if (task.board) {
+        websocketService.emitBoardUpdate(task.board.toString(), {
+          type: 'task_status_updated',
+          taskId: taskId,
+          statusChange: { from, to: status }
+        }, userId);
+      }
+    } catch (error) {
+      console.error('Failed to emit task status update events:', error);
+    }
+
     return task;
   }
 
@@ -178,11 +239,30 @@ class TaskService {
       throw new Error('Task not found');
     }
 
+    const boardId = task.board; // Store board ID before deletion
     task.isDeleted = true;
     task.deletedAt = new Date();
     task.deletedBy = userId;
     await task.save();
     await this.createActivity(task._id, userId, 'task_deleted');
+
+    // Emit real-time task deletion event
+    try {
+      websocketService.emitTaskUpdate(taskId, {
+        type: 'task_deleted',
+        taskId: taskId
+      }, userId);
+
+      // Emit board update if task belonged to a board
+      if (boardId) {
+        websocketService.emitBoardUpdate(boardId.toString(), {
+          type: 'task_removed',
+          taskId: taskId
+        }, userId);
+      }
+    } catch (error) {
+      console.error('Failed to emit task deletion events:', error);
+    }
 
     return task;
   }
@@ -204,6 +284,17 @@ class TaskService {
     task.comments.push(comment);
     await task.save();
     await this.createActivity(task._id, userId, 'comment_added', { text });
+
+    // Emit real-time comment added event
+    try {
+      websocketService.emitTaskUpdate(taskId, {
+        type: 'comment_added',
+        task: await task.populate(['createdBy', 'assignedTo', 'board', 'comments.user']),
+        comment: comment
+      }, userId);
+    } catch (error) {
+      console.error('Failed to emit comment added event:', error);
+    }
 
     return task;
   }

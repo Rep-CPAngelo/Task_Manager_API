@@ -5,6 +5,7 @@ const NotificationPreference = require('../models/NotificationPreference');
 const Task = require('../models/Task');
 const User = require('../models/User');
 const emailService = require('./emailService');
+const websocketService = require('./websocketService');
 
 class NotificationService {
   /**
@@ -15,6 +16,24 @@ class NotificationService {
   async createNotification(notificationData) {
     const notification = new Notification(notificationData);
     await notification.save();
+
+    // Emit real-time notification if it's for immediate delivery
+    if (!notificationData.scheduledFor || new Date(notificationData.scheduledFor) <= new Date()) {
+      try {
+        websocketService.emitNotification(notificationData.recipient, {
+          id: notification._id,
+          type: notification.type,
+          title: notification.title,
+          message: notification.message,
+          relatedTask: notification.relatedTask,
+          relatedUser: notification.relatedUser,
+          createdAt: notification.createdAt
+        });
+      } catch (error) {
+        console.error('Failed to emit real-time notification:', error);
+      }
+    }
+
     return notification;
   }
 
@@ -150,6 +169,22 @@ class NotificationService {
     // Update notification status
     if (results.success) {
       await notification.markAsSent();
+
+      // Emit real-time notification via WebSocket
+      try {
+        websocketService.emitNotification(notification.recipient, {
+          id: notification._id,
+          type: notification.type,
+          title: notification.title,
+          message: notification.message,
+          relatedTask: notification.relatedTask,
+          relatedUser: notification.relatedUser,
+          createdAt: notification.createdAt,
+          deliveredAt: new Date()
+        });
+      } catch (error) {
+        console.error('Failed to emit real-time notification:', error);
+      }
     } else {
       const errors = Object.values(results.channels)
         .filter(r => !r.success)
