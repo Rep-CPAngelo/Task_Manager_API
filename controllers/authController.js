@@ -1,15 +1,9 @@
 /**
  * Authentication Controller
- * Handles authentication-related business logic
+ * Handles authentication-related HTTP requests
  */
 
-const User = require('../models/User');
-const RefreshToken = require('../models/RefreshToken');
-const {
-  generateAccessToken,
-  generateRefreshToken,
-  verifyRefreshToken
-} = require('../utils/auth');
+const authService = require('../services/authService');
 const { successResponse, errorResponse } = require('../utils/response');
 
 class AuthController {
@@ -20,24 +14,7 @@ class AuthController {
    */
   async register (req, res) {
     try {
-      const { name, email, password, role } = req.body;
-
-      // Check if user already exists
-      const userExists = await User.emailExists(email);
-      if (userExists) {
-        return errorResponse(res, 'User already exists', 400);
-      }
-
-      // Only allow setting role if in test environment, otherwise default to 'user'
-      const newUser = new User({
-        name,
-        email,
-        password,
-        role: process.env.NODE_ENV === 'test' ? (role || 'user') : 'user'
-      });
-
-      await newUser.save();
-
+      const newUser = await authService.register(req.body);
       return successResponse(
         res,
         newUser.getPublicProfile(),
@@ -46,6 +23,9 @@ class AuthController {
       );
     } catch (error) {
       console.error('Registration error:', error);
+      if (error.message === 'User already exists') {
+        return errorResponse(res, error.message, 400);
+      }
       if (error.name === 'ValidationError') {
         return errorResponse(res, error.message, 400);
       }
@@ -61,29 +41,13 @@ class AuthController {
   async login (req, res) {
     try {
       const { email, password } = req.body;
-
-      // Validate credentials
-      const user = await User.validateCredentials(email, password);
-      if (!user) {
-        return errorResponse(res, 'Invalid credentials', 401);
-      }
-
-      // Generate tokens
-      const accessToken = generateAccessToken(user);
-      const { token: refreshToken, jti, expiresAt } = generateRefreshToken(user.id || user._id);
-
-      // Persist refresh token metadata
-      await RefreshToken.create({
-        user: user.id || user._id,
-        jti,
-        expiresAt,
-        createdByIp: req.ip,
-        userAgent: req.headers['user-agent'] || null
-      });
-
-      return successResponse(res, { accessToken, refreshToken, user }, 'Login successful');
+      const result = await authService.login(email, password, req.ip, req.headers['user-agent'] || null);
+      return successResponse(res, result, 'Login successful');
     } catch (error) {
       console.error('Login error:', error);
+      if (error.message === 'Invalid credentials') {
+        return errorResponse(res, 'Invalid credentials', 401);
+      }
       return errorResponse(res, 'Server error', 500);
     }
   }
@@ -95,16 +59,13 @@ class AuthController {
    */
   async getProfile (req, res) {
     try {
-      const userId = req.user.id;
-      const user = await User.findById(userId);
-
-      if (!user) {
-        return errorResponse(res, 'User not found', 404);
-      }
-
-      return successResponse(res, user.getPublicProfile(), 'Profile retrieved successfully');
+      const user = await authService.getProfile(req.user.id);
+      return successResponse(res, user, 'Profile retrieved successfully');
     } catch (error) {
       console.error('Get profile error:', error);
+      if (error.message === 'User not found') {
+        return errorResponse(res, 'User not found', 404);
+      }
       return errorResponse(res, 'Server error', 500);
     }
   }
@@ -116,31 +77,16 @@ class AuthController {
    */
   async updateProfile (req, res) {
     try {
-      const userId = req.user.id;
-      const { name, email } = req.body;
-
-      const user = await User.findById(userId);
-      if (!user) {
-        return errorResponse(res, 'User not found', 404);
-      }
-
-      // Check if email is already taken by another user
-      if (email && email !== user.email) {
-        const existingUser = await User.findByEmail(email);
-        if (existingUser) {
-          return errorResponse(res, 'Email already in use', 400);
-        }
-      }
-
-      // Update user
-      if (name) user.name = name;
-      if (email) user.email = email;
-
-      await user.save();
-
+      const user = await authService.updateProfile(req.user.id, req.body);
       return successResponse(res, user.getPublicProfile(), 'Profile updated successfully');
     } catch (error) {
       console.error('Update profile error:', error);
+      if (error.message === 'User not found') {
+        return errorResponse(res, 'User not found', 404);
+      }
+      if (error.message === 'Email already in use') {
+        return errorResponse(res, 'Email already in use', 400);
+      }
       if (error.name === 'ValidationError') {
         return errorResponse(res, error.message, 400);
       }
@@ -155,27 +101,17 @@ class AuthController {
    */
   async changePassword (req, res) {
     try {
-      const userId = req.user.id;
       const { currentPassword, newPassword } = req.body;
-
-      const user = await User.findById(userId).select('+password');
-      if (!user) {
-        return errorResponse(res, 'User not found', 404);
-      }
-
-      // Validate current password
-      const isMatch = await user.comparePassword(currentPassword);
-      if (!isMatch) {
-        return errorResponse(res, 'Current password is incorrect', 400);
-      }
-
-      // Update password
-      user.password = newPassword;
-      await user.save();
-
+      await authService.changePassword(req.user.id, currentPassword, newPassword);
       return successResponse(res, null, 'Password changed successfully');
     } catch (error) {
       console.error('Change password error:', error);
+      if (error.message === 'User not found') {
+        return errorResponse(res, 'User not found', 404);
+      }
+      if (error.message === 'Current password is incorrect') {
+        return errorResponse(res, 'Current password is incorrect', 400);
+      }
       if (error.name === 'ValidationError') {
         return errorResponse(res, error.message, 400);
       }
@@ -193,43 +129,13 @@ class AuthController {
         return errorResponse(res, 'Refresh token is required', 400);
       }
 
-      // Validate refresh token signature and payload
-      const decoded = verifyRefreshToken(refreshToken);
-      const { jti, sub } = decoded;
-
-      // Check token record
-      const tokenRecord = await RefreshToken.findOne({ jti, user: sub });
-      if (!tokenRecord || tokenRecord.revoked || tokenRecord.expiresAt < new Date()) {
-        return errorResponse(res, 'Invalid or expired refresh token', 401);
-      }
-
-      // Rotate refresh token: revoke old and create new
-      tokenRecord.revoked = true;
-      const { token: newRefreshToken, jti: newJti, expiresAt: newExpiresAt } = generateRefreshToken(sub);
-      tokenRecord.replacedByJti = newJti;
-      await tokenRecord.save();
-
-      await RefreshToken.create({
-        user: sub,
-        jti: newJti,
-        expiresAt: newExpiresAt,
-        createdByIp: req.ip,
-        userAgent: req.headers['user-agent'] || null
-      });
-
-      // Issue new access token
-      const user = await User.findById(sub);
-      if (!user || !user.isActive) {
-        return errorResponse(res, 'User not found or inactive', 404);
-      }
-      const accessToken = generateAccessToken(user);
-
-      return successResponse(res, {
-        accessToken,
-        refreshToken: newRefreshToken
-      }, 'Token refreshed');
+      const result = await authService.refreshToken(refreshToken, req.ip, req.headers['user-agent'] || null);
+      return successResponse(res, result, 'Token refreshed');
     } catch (error) {
       console.error('Refresh token error:', error);
+      if (error.message.includes('Invalid or expired') || error.message.includes('User not found')) {
+        return errorResponse(res, error.message, 401);
+      }
       return errorResponse(res, 'Invalid refresh token', 401);
     }
   }
@@ -240,20 +146,13 @@ class AuthController {
   async logout (req, res) {
     try {
       const { refreshToken } = req.body;
-      if (!refreshToken) {
-        return errorResponse(res, 'Refresh token is required', 400);
-      }
-      const decoded = verifyRefreshToken(refreshToken);
-      const { jti, sub } = decoded;
-      const tokenRecord = await RefreshToken.findOne({ jti, user: sub });
-      if (!tokenRecord) {
-        return successResponse(res, null, 'Logged out');
-      }
-      tokenRecord.revoked = true;
-      await tokenRecord.save();
+      await authService.logout(refreshToken);
       return successResponse(res, null, 'Logged out');
     } catch (error) {
       console.error('Logout error:', error);
+      if (error.message === 'Refresh token is required') {
+        return errorResponse(res, 'Refresh token is required', 400);
+      }
       return errorResponse(res, 'Failed to logout', 400);
     }
   }

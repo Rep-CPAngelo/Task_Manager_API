@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Task Manager API",
-    "version": "1.0.0",
-    "description": "REST API for authentication, user management, and task management with comments, attachments, subtasks, and activity feed."
+    "version": "1.1.0",
+    "description": "Advanced REST API for authentication, user management, task management with comments, attachments, subtasks, recurring tasks, activity feed, Kanban boards, notifications, and team collaboration features."
   },
   "servers": [
     { "url": "/api" }
@@ -122,6 +122,17 @@
           "createdAt": { "type": "string", "format": "date-time" }
         }
       },
+      "Recurrence": {
+        "type": "object",
+        "properties": {
+          "frequency": { "type": "string", "enum": ["daily", "weekly", "monthly", "yearly"] },
+          "interval": { "type": "integer", "minimum": 1, "maximum": 365, "default": 1 },
+          "daysOfWeek": { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 6 }, "description": "0=Sunday, 1=Monday, etc." },
+          "dayOfMonth": { "type": "integer", "minimum": 1, "maximum": 31 },
+          "endDate": { "type": "string", "format": "date-time" },
+          "maxOccurrences": { "type": "integer", "minimum": 1, "maximum": 1000 }
+        }
+      },
       "Task": {
         "type": "object",
         "properties": {
@@ -137,6 +148,14 @@
           "subtasks": { "type": "array", "items": { "$ref": "#/components/schemas/Subtask" } },
           "attachments": { "type": "array", "items": { "type": "string" } },
           "comments": { "type": "array", "items": { "$ref": "#/components/schemas/Comment" } },
+          "isRecurring": { "type": "boolean", "default": false },
+          "recurrence": { "$ref": "#/components/schemas/Recurrence" },
+          "parentTask": { "type": "string", "description": "Reference to parent recurring task" },
+          "nextDueDate": { "type": "string", "format": "date-time" },
+          "occurrenceCount": { "type": "integer", "default": 0 },
+          "boardId": { "type": "string", "description": "Reference to board ID" },
+          "columnId": { "type": "string", "description": "Reference to column ID within board" },
+          "position": { "type": "integer", "description": "Position within the column", "default": 0 },
           "createdAt": { "type": "string", "format": "date-time" },
           "updatedAt": { "type": "string", "format": "date-time" }
         }
@@ -199,6 +218,35 @@
           "status": { "type": "string", "enum": ["pending", "completed"] }
         }
       },
+      "CreateRecurringTaskRequest": {
+        "type": "object",
+        "required": ["title", "dueDate", "isRecurring", "recurrence"],
+        "properties": {
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "status": { "type": "string", "enum": ["pending", "in-progress", "completed", "overdue"], "default": "pending" },
+          "priority": { "type": "string", "enum": ["low", "medium", "high"], "default": "medium" },
+          "dueDate": { "type": "string", "format": "date-time" },
+          "assignedTo": { "type": "string" },
+          "labels": { "type": "array", "items": { "type": "string" } },
+          "subtasks": { "type": "array", "items": { "$ref": "#/components/schemas/Subtask" } },
+          "attachments": { "type": "array", "items": { "type": "string", "format": "uri" } },
+          "isRecurring": { "type": "boolean", "enum": [true] },
+          "recurrence": { "$ref": "#/components/schemas/Recurrence" },
+          "nextDueDate": { "type": "string", "format": "date-time" }
+        }
+      },
+      "UpdateRecurrenceRequest": {
+        "type": "object",
+        "properties": {
+          "frequency": { "type": "string", "enum": ["daily", "weekly", "monthly", "yearly"] },
+          "interval": { "type": "integer", "minimum": 1, "maximum": 365 },
+          "daysOfWeek": { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 6 } },
+          "dayOfMonth": { "type": "integer", "minimum": 1, "maximum": 31 },
+          "endDate": { "type": "string", "format": "date-time" },
+          "maxOccurrences": { "type": "integer", "minimum": 1, "maximum": 1000 }
+        }
+      },
       "LoginResponse": {
         "type": "object",
         "properties": {
@@ -246,6 +294,353 @@
             }
           },
           "pagination": { "$ref": "#/components/schemas/Pagination" }
+        }
+      },
+      "Board": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string", "description": "Board ID" },
+          "title": { "type": "string", "description": "Board title" },
+          "description": { "type": "string", "description": "Board description" },
+          "owner": { "type": "string", "description": "Board owner user ID" },
+          "columns": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Column" },
+            "description": "Board columns"
+          },
+          "members": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/BoardMember" },
+            "description": "Board members"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": ["private", "team", "public"],
+            "description": "Board visibility"
+          },
+          "settings": { "$ref": "#/components/schemas/BoardSettings" },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Board tags"
+          },
+          "backgroundColor": {
+            "type": "string",
+            "pattern": "^#[0-9A-Fa-f]{6}$",
+            "description": "Board background color"
+          },
+          "isArchived": { "type": "boolean", "description": "Archive status" },
+          "stats": { "$ref": "#/components/schemas/BoardStats" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Column": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string", "description": "Column ID" },
+          "title": { "type": "string", "description": "Column title" },
+          "position": { "type": "integer", "description": "Column position" },
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9A-Fa-f]{6}$",
+            "description": "Column color"
+          },
+          "wipLimit": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Work in progress limit"
+          },
+          "isCollapsed": { "type": "boolean", "description": "Collapse status" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "BoardMember": {
+        "type": "object",
+        "properties": {
+          "user": { "type": "string", "description": "User ID" },
+          "role": {
+            "type": "string",
+            "enum": ["owner", "admin", "member", "viewer"],
+            "description": "Member role"
+          },
+          "addedAt": { "type": "string", "format": "date-time" },
+          "addedBy": { "type": "string", "description": "User ID who added this member" }
+        }
+      },
+      "BoardSettings": {
+        "type": "object",
+        "properties": {
+          "allowGuestView": { "type": "boolean" },
+          "requireApprovalForJoin": { "type": "boolean" },
+          "defaultTaskPriority": {
+            "type": "string",
+            "enum": ["low", "medium", "high"]
+          },
+          "enableWipLimits": { "type": "boolean" },
+          "autoArchiveCompleted": { "type": "boolean" },
+          "autoArchiveDays": { "type": "integer" }
+        }
+      },
+      "BoardStats": {
+        "type": "object",
+        "properties": {
+          "totalTasks": { "type": "integer" },
+          "completedTasks": { "type": "integer" },
+          "activeTasks": { "type": "integer" },
+          "lastActivity": { "type": "string", "format": "date-time" }
+        }
+      },
+      "CreateBoardRequest": {
+        "type": "object",
+        "required": ["title", "columns"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Board title"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Board description"
+          },
+          "columns": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["title"],
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "color": {
+                  "type": "string",
+                  "pattern": "^#[0-9A-Fa-f]{6}$"
+                },
+                "wipLimit": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "visibility": {
+            "type": "string",
+            "enum": ["private", "team", "public"],
+            "default": "private"
+          },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "backgroundColor": {
+            "type": "string",
+            "pattern": "^#[0-9A-Fa-f]{6}$"
+          }
+        }
+      },
+      "UpdateBoardRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "visibility": {
+            "type": "string",
+            "enum": ["private", "team", "public"]
+          },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "backgroundColor": {
+            "type": "string",
+            "pattern": "^#[0-9A-Fa-f]{6}$"
+          }
+        }
+      },
+      "BoardListResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Board" }
+          },
+          "pagination": { "$ref": "#/components/schemas/Pagination" },
+          "message": { "type": "string" }
+        }
+      },
+      "PerformanceMetrics": {
+        "type": "object",
+        "properties": {
+          "requests": {
+            "type": "object",
+            "properties": {
+              "total": { "type": "number", "example": 1250 },
+              "byMethod": {
+                "type": "object",
+                "properties": {
+                  "GET": { "type": "number", "example": 800 },
+                  "POST": { "type": "number", "example": 300 },
+                  "PATCH": { "type": "number", "example": 100 },
+                  "DELETE": { "type": "number", "example": 50 }
+                }
+              },
+              "byRoute": {
+                "type": "object",
+                "additionalProperties": { "type": "number" }
+              },
+              "byStatusCode": {
+                "type": "object",
+                "properties": {
+                  "200": { "type": "number", "example": 1100 },
+                  "201": { "type": "number", "example": 80 },
+                  "400": { "type": "number", "example": 30 },
+                  "401": { "type": "number", "example": 25 },
+                  "404": { "type": "number", "example": 10 },
+                  "500": { "type": "number", "example": 5 }
+                }
+              }
+            }
+          },
+          "responseTimes": {
+            "type": "object",
+            "properties": {
+              "avgResponseTime": { "type": "number", "example": 125.5 },
+              "p95ResponseTime": { "type": "number", "example": 280.2 },
+              "p99ResponseTime": { "type": "number", "example": 450.8 },
+              "min": { "type": "number", "example": 12.3 },
+              "max": { "type": "number", "example": 1200.5 }
+            }
+          },
+          "memory": {
+            "type": "object",
+            "properties": {
+              "heapUsed": { "type": "number", "example": 45678901 },
+              "heapTotal": { "type": "number", "example": 67890123 },
+              "external": { "type": "number", "example": 1234567 },
+              "rss": { "type": "number", "example": 89012345 }
+            }
+          },
+          "calculated": {
+            "type": "object",
+            "properties": {
+              "requestsPerSecond": { "type": "number", "example": 15.8 },
+              "errorRate": { "type": "number", "example": 2.5 }
+            }
+          },
+          "uptime": { "type": "number", "example": 86400 },
+          "timestamp": { "type": "string", "format": "date-time", "example": "2025-01-15T10:30:00.000Z" }
+        }
+      },
+      "PerformanceHealth": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["healthy", "degraded", "unhealthy"],
+            "example": "healthy"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2025-01-15T10:30:00.000Z"
+          },
+          "uptime": { "type": "number", "example": 86400 },
+          "performance": {
+            "type": "object",
+            "properties": {
+              "avgResponseTime": { "type": "number", "example": 125.5 },
+              "requestsPerSecond": { "type": "number", "example": 15.8 },
+              "errorRate": { "type": "number", "example": 2.5 }
+            }
+          },
+          "memory": {
+            "type": "object",
+            "properties": {
+              "heapUsed": { "type": "number", "example": 45678901 },
+              "heapTotal": { "type": "number", "example": 67890123 },
+              "rss": { "type": "number", "example": 89012345 }
+            }
+          },
+          "requests": {
+            "type": "object",
+            "properties": {
+              "total": { "type": "number", "example": 1250 },
+              "last5min": { "type": "number", "example": 75 }
+            }
+          }
+        }
+      },
+      "BenchmarkRecommendations": {
+        "type": "object",
+        "properties": {
+          "currentMetrics": { "$ref": "#/components/schemas/PerformanceMetrics" },
+          "recommendations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "category": {
+                  "type": "string",
+                  "enum": ["database", "memory", "response_time", "error_rate", "caching"],
+                  "example": "response_time"
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": ["low", "medium", "high", "critical"],
+                  "example": "high"
+                },
+                "title": { "type": "string", "example": "Optimize slow database queries" },
+                "description": { "type": "string", "example": "Average response time is above recommended threshold. Consider adding database indexes or implementing caching." },
+                "action": { "type": "string", "example": "Add indexes to frequently queried fields" }
+              }
+            }
+          },
+          "benchmarks": {
+            "type": "object",
+            "properties": {
+              "responseTimes": {
+                "type": "object",
+                "properties": {
+                  "excellent": { "type": "number", "example": 100 },
+                  "good": { "type": "number", "example": 300 },
+                  "acceptable": { "type": "number", "example": 1000 },
+                  "poor": { "type": "number", "example": 1001 }
+                }
+              },
+              "errorRates": {
+                "type": "object",
+                "properties": {
+                  "excellent": { "type": "number", "example": 0.1 },
+                  "good": { "type": "number", "example": 1.0 },
+                  "acceptable": { "type": "number", "example": 5.0 },
+                  "poor": { "type": "number", "example": 5.1 }
+                }
+              },
+              "throughput": {
+                "type": "object",
+                "properties": {
+                  "minimum": { "type": "number", "example": 10 },
+                  "target": { "type": "number", "example": 50 },
+                  "excellent": { "type": "number", "example": 100 }
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -370,6 +765,84 @@
     "/tasks/{id}/subtasks": { "post": { "summary": "Add subtask", "requestBody": {"required": true, "content": {"application/json": {"schema": { "$ref": "#/components/schemas/AddSubtaskRequest" }}}}, "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponseTask" } } } } }, "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } } ] } },
     "/tasks/{id}/subtasks/{subId}": { "patch": { "summary": "Update subtask", "requestBody": {"required": true, "content": {"application/json": {"schema": { "$ref": "#/components/schemas/UpdateSubtaskRequest" }}}}, "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponseTask" } } } } }, "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "subId", "in": "path", "required": true, "schema": { "type": "string" } } ] } },
     "/tasks/{id}/activity": { "get": { "summary": "Task activity feed", "parameters": [ { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } }, { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 10 } }, { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } } ], "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaginatedActivityResponse" } } } } } } },
+    "/tasks/recurring": {
+      "post": {
+        "summary": "Create recurring task",
+        "tags": ["Tasks"],
+        "security": [{ "ApiToken": [] }, { "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateRecurringTaskRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponseTask" } } } },
+          "400": { "description": "Bad Request", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/tasks/recurring/generate": {
+      "post": {
+        "summary": "Generate due recurring tasks (Admin only)",
+        "tags": ["Tasks"],
+        "security": [{ "ApiToken": [] }, { "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "object", "properties": { "success": { "type": "boolean" }, "message": { "type": "string" }, "data": { "type": "object", "properties": { "count": { "type": "integer" }, "tasks": { "type": "array", "items": { "$ref": "#/components/schemas/Task" } } } } } } } } },
+          "401": { "description": "Unauthorized" },
+          "403": { "description": "Forbidden - Admin access required" }
+        }
+      }
+    },
+    "/tasks/{id}/recurrence": {
+      "patch": {
+        "summary": "Update recurrence settings",
+        "tags": ["Tasks"],
+        "security": [{ "ApiToken": [] }, { "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateRecurrenceRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponseTask" } } } },
+          "400": { "description": "Bad Request", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "description": "Unauthorized" },
+          "403": { "description": "Forbidden" },
+          "404": { "description": "Not Found" }
+        }
+      }
+    },
+    "/tasks/{id}/instances": {
+      "get": {
+        "summary": "Get recurring task instances",
+        "tags": ["Tasks"],
+        "security": [{ "ApiToken": [] }, { "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 10 } },
+          { "name": "sortBy", "in": "query", "schema": { "type": "string", "enum": ["createdAt", "updatedAt", "dueDate", "status"], "default": "createdAt" } },
+          { "name": "sortOrder", "in": "query", "schema": { "type": "string", "enum": ["asc", "desc"], "default": "desc" } }
+        ],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaginatedTaskResponse" } } } },
+          "400": { "description": "Bad Request", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "description": "Unauthorized" },
+          "403": { "description": "Forbidden" },
+          "404": { "description": "Not Found" }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health check",
@@ -522,6 +995,725 @@
           "400": {
             "description": "Bad Request",
             "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/boards": {
+      "post": {
+        "summary": "Create a new board",
+        "tags": ["Boards"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateBoardRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Board created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/Board" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Get boards for authenticated user",
+        "tags": ["Boards"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": { "type": "integer", "minimum": 1, "default": 1 },
+            "description": "Page number"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 },
+            "description": "Number of boards per page"
+          },
+          {
+            "in": "query",
+            "name": "visibility",
+            "schema": { "type": "string", "enum": ["private", "team", "public"] },
+            "description": "Filter by visibility"
+          },
+          {
+            "in": "query",
+            "name": "includeArchived",
+            "schema": { "type": "boolean", "default": false },
+            "description": "Include archived boards"
+          },
+          {
+            "in": "query",
+            "name": "tags",
+            "schema": {
+              "oneOf": [
+                { "type": "string" },
+                { "type": "array", "items": { "type": "string" } }
+              ]
+            },
+            "description": "Filter by tags"
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": { "type": "string" },
+            "description": "Search in title and description"
+          },
+          {
+            "in": "query",
+            "name": "sortBy",
+            "schema": {
+              "type": "string",
+              "enum": ["title", "createdAt", "updatedAt", "lastActivity"],
+              "default": "lastActivity"
+            },
+            "description": "Sort field"
+          },
+          {
+            "in": "query",
+            "name": "sortOrder",
+            "schema": { "type": "string", "enum": ["asc", "desc"], "default": "desc" },
+            "description": "Sort order"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Boards retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/BoardListResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/boards/public": {
+      "get": {
+        "summary": "Get public boards",
+        "tags": ["Boards"],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": { "type": "integer", "minimum": 1, "default": 1 }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 }
+          },
+          {
+            "in": "query",
+            "name": "tags",
+            "schema": {
+              "oneOf": [
+                { "type": "string" },
+                { "type": "array", "items": { "type": "string" } }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public boards retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/BoardListResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/boards/{id}": {
+      "get": {
+        "summary": "Get board by ID",
+        "tags": ["Boards"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Board ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Board retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "allOf": [
+                        { "$ref": "#/components/schemas/Board" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "tasksByColumn": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "array",
+                                "items": { "$ref": "#/components/schemas/Task" }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Board not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update board",
+        "tags": ["Boards"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Board ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateBoardRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Board updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/Board" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Board not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete board",
+        "tags": ["Boards"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Board ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Board deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cannot delete board with existing tasks",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Board not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/boards/{id}/columns": {
+      "post": {
+        "summary": "Add column to board",
+        "tags": ["Boards"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Board ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title"],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "position": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "color": {
+                    "type": "string",
+                    "pattern": "^#[0-9A-Fa-f]{6}$"
+                  },
+                  "wipLimit": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Column added successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/Board" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Board not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/boards/{id}/members": {
+      "post": {
+        "summary": "Add member to board",
+        "tags": ["Boards"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Board ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["userId"],
+                "properties": {
+                  "userId": { "type": "string" },
+                  "role": {
+                    "type": "string",
+                    "enum": ["admin", "member", "viewer"],
+                    "default": "member"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Member added successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/Board" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Board or user not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/boards/{id}/stats": {
+      "get": {
+        "summary": "Get board statistics",
+        "tags": ["Boards"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Board ID"
+          },
+          {
+            "in": "query",
+            "name": "period",
+            "schema": {
+              "type": "string",
+              "enum": ["week", "month", "quarter", "year"],
+              "default": "month"
+            }
+          },
+          {
+            "in": "query",
+            "name": "startDate",
+            "schema": { "type": "string", "format": "date" }
+          },
+          {
+            "in": "query",
+            "name": "endDate",
+            "schema": { "type": "string", "format": "date" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Board statistics retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "totalTasks": { "type": "integer" },
+                        "tasksByStatus": { "type": "object" },
+                        "tasksByPriority": { "type": "object" },
+                        "tasksByColumn": { "type": "object" },
+                        "tasksByAssignee": { "type": "array" },
+                        "completionRate": { "type": "integer" },
+                        "period": { "type": "string" },
+                        "board": {
+                          "type": "object",
+                          "properties": {
+                            "id": { "type": "string" },
+                            "title": { "type": "string" },
+                            "memberCount": { "type": "integer" },
+                            "columnCount": { "type": "integer" }
+                          }
+                        }
+                      }
+                    },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Board not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/performance/metrics": {
+      "get": {
+        "summary": "Get performance metrics (admin only)",
+        "tags": ["Performance"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Performance metrics retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": { "$ref": "#/components/schemas/PerformanceMetrics" },
+                    "message": { "type": "string", "example": "Performance metrics retrieved successfully" }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin access required",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/performance/health": {
+      "get": {
+        "summary": "Get performance health status",
+        "tags": ["Performance"],
+        "responses": {
+          "200": {
+            "description": "Health status retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": { "$ref": "#/components/schemas/PerformanceHealth" },
+                    "message": { "type": "string", "example": "Performance health status retrieved successfully" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/performance/reset": {
+      "post": {
+        "summary": "Reset performance metrics (admin only)",
+        "tags": ["Performance"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Performance metrics reset successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "message": { "type": "string", "example": "Performance metrics reset successfully" }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin access required",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/performance/benchmark": {
+      "get": {
+        "summary": "Get benchmark recommendations",
+        "tags": ["Performance"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Benchmark recommendations retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": { "$ref": "#/components/schemas/BenchmarkRecommendations" },
+                    "message": { "type": "string", "example": "Performance benchmark recommendations retrieved successfully" }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin access required",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
           }
         }
       }

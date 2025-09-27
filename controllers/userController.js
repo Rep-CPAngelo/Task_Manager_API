@@ -1,9 +1,9 @@
 /**
  * User Controller
- * Handles user-related business logic
+ * Handles user-related HTTP requests
  */
 
-const User = require('../models/User');
+const userService = require('../services/userService');
 const { successResponse, errorResponse, paginatedResponse } = require('../utils/response');
 
 class UserController {
@@ -14,16 +14,8 @@ class UserController {
    */
   async getAllUsers (req, res) {
     try {
-      const users = await User.find({ isActive: true, isDeleted: false }).select('-password').lean();
-
-      return successResponse(
-        res,
-        {
-          count: users.length,
-          users: users.map(user => user.getPublicProfile())
-        },
-        'Users retrieved successfully'
-      );
+      const result = await userService.getAllUsers();
+      return successResponse(res, result, 'Users retrieved successfully');
     } catch (error) {
       console.error('Get all users error:', error);
       return errorResponse(res, 'Failed to fetch users', 500);
@@ -37,16 +29,13 @@ class UserController {
    */
   async getUserById (req, res) {
     try {
-      const userId = req.params.id;
-      const user = await User.findById(userId).select('-password');
-
-      if (!user || user.isDeleted) {
-        return errorResponse(res, 'User not found', 404);
-      }
-
+      const user = await userService.getUserById(req.params.id);
       return successResponse(res, user.getPublicProfile(), 'User retrieved successfully');
     } catch (error) {
       console.error('Get user by ID error:', error);
+      if (error.message === 'User not found') {
+        return errorResponse(res, 'User not found', 404);
+      }
       return errorResponse(res, 'Failed to fetch user', 500);
     }
   }
@@ -58,32 +47,13 @@ class UserController {
    */
   async createUser (req, res) {
     try {
-      const { name, email, password, role } = req.body;
-
-      // Check if user already exists
-      const userExists = await User.emailExists(email);
-      if (userExists) {
-        return errorResponse(res, 'User already exists', 400);
-      }
-
-      // Create new user
-      const newUser = new User({
-        name,
-        email,
-        password,
-        role: role || 'user'
-      });
-
-      await newUser.save();
-
-      return successResponse(
-        res,
-        newUser.getPublicProfile(),
-        'User created successfully',
-        201
-      );
+      const newUser = await userService.createUser(req.body);
+      return successResponse(res, newUser.getPublicProfile(), 'User created successfully', 201);
     } catch (error) {
       console.error('Create user error:', error);
+      if (error.message === 'User already exists') {
+        return errorResponse(res, error.message, 400);
+      }
       if (error.name === 'ValidationError') {
         return errorResponse(res, error.message, 400);
       }
@@ -98,33 +68,16 @@ class UserController {
    */
   async updateUser (req, res) {
     try {
-      const userId = req.params.id;
-      const { name, email, role, isActive } = req.body;
-
-      const user = await User.findById(userId);
-      if (!user || user.isDeleted) {
-        return errorResponse(res, 'User not found', 404);
-      }
-
-      // Check if email is already taken by another user
-      if (email && email !== user.email) {
-        const existingUser = await User.findByEmail(email);
-        if (existingUser) {
-          return errorResponse(res, 'Email already in use', 400);
-        }
-      }
-
-      // Update user
-      if (name) user.name = name;
-      if (email) user.email = email;
-      if (role) user.role = role;
-      if (typeof isActive === 'boolean') user.isActive = isActive;
-
-      await user.save();
-
+      const user = await userService.updateUser(req.params.id, req.body);
       return successResponse(res, user.getPublicProfile(), 'User updated successfully');
     } catch (error) {
       console.error('Update user error:', error);
+      if (error.message === 'User not found') {
+        return errorResponse(res, 'User not found', 404);
+      }
+      if (error.message === 'Email already in use') {
+        return errorResponse(res, 'Email already in use', 400);
+      }
       if (error.name === 'ValidationError') {
         return errorResponse(res, error.message, 400);
       }
@@ -139,23 +92,13 @@ class UserController {
    */
   async deleteUser (req, res) {
     try {
-      const userId = req.params.id;
-      const user = await User.findById(userId);
-
-      if (!user || user.isDeleted) {
-        return errorResponse(res, 'User not found', 404);
-      }
-
-      // Soft delete
-      user.isActive = false;
-      user.isDeleted = true;
-      user.deletedAt = new Date();
-      user.deletedBy = req.user.id;
-      await user.save();
-
+      await userService.deleteUser(req.params.id, req.user.id);
       return successResponse(res, null, 'User deleted successfully (soft)');
     } catch (error) {
       console.error('Delete user error:', error);
+      if (error.message === 'User not found') {
+        return errorResponse(res, 'User not found', 404);
+      }
       return errorResponse(res, 'Failed to delete user', 500);
     }
   }
@@ -167,43 +110,13 @@ class UserController {
    */
   async searchUsers (req, res) {
     try {
-      const { query, page = 1, limit = 10, role } = req.query;
-
-      // Build search criteria
-      const searchCriteria = { isActive: true, isDeleted: false };
-
-      if (query) {
-        searchCriteria.$or = [
-          { name: { $regex: query, $options: 'i' } },
-          { email: { $regex: query, $options: 'i' } }
-        ];
-      }
-
-      if (role) {
-        searchCriteria.role = role;
-      }
-
-      // Calculate pagination
-      const skip = (parseInt(page) - 1) * parseInt(limit);
-
-      // Execute query
-      const users = await User.find(searchCriteria)
-        .select('-password')
-        .skip(skip)
-        .limit(parseInt(limit))
-        .sort({ createdAt: -1 })
-        .lean();
-
-      const total = await User.countDocuments(searchCriteria);
-
-      const usersData = users.map(user => user.getPublicProfile());
-
+      const result = await userService.searchUsers(req.query);
       return paginatedResponse(
         res,
-        usersData,
-        parseInt(page),
-        parseInt(limit),
-        total
+        result.users,
+        result.pagination.current,
+        result.pagination.limit,
+        result.pagination.total
       );
     } catch (error) {
       console.error('Search users error:', error);
@@ -218,8 +131,7 @@ class UserController {
    */
   async getUserStats (req, res) {
     try {
-      const stats = await User.getStats();
-
+      const stats = await userService.getUserStats();
       return successResponse(res, stats, 'User statistics retrieved successfully');
     } catch (error) {
       console.error('Get user stats error:', error);

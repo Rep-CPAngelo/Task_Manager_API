@@ -11,7 +11,10 @@
     { "key": "refresh_token", "value": "", "type": "string" },
     { "key": "user_id", "value": "", "type": "string" },
     { "key": "task_id", "value": "", "type": "string" },
-    { "key": "subtask_id", "value": "", "type": "string" }
+    { "key": "subtask_id", "value": "", "type": "string" },
+    { "key": "board_id", "value": "", "type": "string" },
+    { "key": "column_id", "value": "", "type": "string" },
+    { "key": "member_user_id", "value": "", "type": "string" }
   ],
   "item": [
     {
@@ -563,6 +566,345 @@
             "method": "DELETE",
             "header": [ { "key": "x-auth-token", "value": "{{token}}" } ],
             "url": { "raw": "{{base_url}}/tasks/{{task_id}}", "host": ["{{base_url}}"], "path": ["tasks", "{{task_id}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Boards",
+      "item": [
+        {
+          "name": "POST /api/boards",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.data && response.data._id) {",
+                  "        pm.collectionVariables.set('board_id', response.data._id);",
+                  "        console.log('Board ID set to:', response.data._id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "x-auth-token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"My Kanban Board\",\n  \"description\": \"Project management board\",\n  \"columns\": [\n    { \"title\": \"To Do\", \"color\": \"#3498db\" },\n    { \"title\": \"In Progress\", \"color\": \"#f39c12\" },\n    { \"title\": \"Done\", \"color\": \"#27ae60\" }\n  ],\n  \"visibility\": \"team\",\n  \"tags\": [\"development\", \"project\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/boards",
+              "host": ["{{base_url}}"],
+              "path": ["boards"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/boards",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "x-auth-token", "value": "{{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/boards?page=1&limit=10&sortBy=lastActivity&sortOrder=desc",
+              "host": ["{{base_url}}"],
+              "path": ["boards"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" },
+                { "key": "sortBy", "value": "lastActivity" },
+                { "key": "sortOrder", "value": "desc" },
+                { "key": "visibility", "value": "", "disabled": true },
+                { "key": "includeArchived", "value": "false", "disabled": true },
+                { "key": "tags", "value": "", "disabled": true },
+                { "key": "search", "value": "", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/boards/public",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/boards/public?page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["boards", "public"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "tags", "value": "", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/boards/:id",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "x-auth-token", "value": "{{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/boards/{{board_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["boards", "{{board_id}}"]
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/boards/:id",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "x-auth-token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Board Title\",\n  \"description\": \"Updated description\",\n  \"visibility\": \"public\",\n  \"tags\": [\"updated\", \"kanban\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/boards/{{board_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["boards", "{{board_id}}"]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/boards/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "x-auth-token", "value": "{{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/boards/{{board_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["boards", "{{board_id}}"]
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/boards/:id/archive",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "x-auth-token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"archived\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/boards/{{board_id}}/archive",
+              "host": ["{{base_url}}"],
+              "path": ["boards", "{{board_id}}", "archive"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/boards/:id/duplicate",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "x-auth-token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Duplicated Board\",\n  \"includeTasks\": false,\n  \"includeMembers\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/boards/{{board_id}}/duplicate",
+              "host": ["{{base_url}}"],
+              "path": ["boards", "{{board_id}}", "duplicate"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/boards/:id/stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "x-auth-token", "value": "{{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/boards/{{board_id}}/stats?period=month",
+              "host": ["{{base_url}}"],
+              "path": ["boards", "{{board_id}}", "stats"],
+              "query": [
+                { "key": "period", "value": "month" },
+                { "key": "startDate", "value": "", "disabled": true },
+                { "key": "endDate", "value": "", "disabled": true }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Board Columns",
+      "item": [
+        {
+          "name": "POST /api/boards/:id/columns",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.data && response.data.columns) {",
+                  "        const lastColumn = response.data.columns[response.data.columns.length - 1];",
+                  "        if (lastColumn && lastColumn._id) {",
+                  "            pm.collectionVariables.set('column_id', lastColumn._id);",
+                  "            console.log('Column ID set to:', lastColumn._id);",
+                  "        }",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "x-auth-token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Review\",\n  \"color\": \"#9b59b6\",\n  \"wipLimit\": 5\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/boards/{{board_id}}/columns",
+              "host": ["{{base_url}}"],
+              "path": ["boards", "{{board_id}}", "columns"]
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/boards/:id/columns/:columnId",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "x-auth-token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Code Review\",\n  \"color\": \"#e74c3c\",\n  \"wipLimit\": 3\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/boards/{{board_id}}/columns/{{column_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["boards", "{{board_id}}", "columns", "{{column_id}}"]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/boards/:id/columns/:columnId",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "x-auth-token", "value": "{{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/boards/{{board_id}}/columns/{{column_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["boards", "{{board_id}}", "columns", "{{column_id}}"]
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/boards/:id/columns/reorder",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "x-auth-token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"columns\": [\n    { \"columnId\": \"{{column_id}}\", \"position\": 0 },\n    { \"columnId\": \"other_column_id\", \"position\": 1 }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/boards/{{board_id}}/columns/reorder",
+              "host": ["{{base_url}}"],
+              "path": ["boards", "{{board_id}}", "columns", "reorder"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Board Members",
+      "item": [
+        {
+          "name": "POST /api/boards/:id/members",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "x-auth-token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{member_user_id}}\",\n  \"role\": \"member\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/boards/{{board_id}}/members",
+              "host": ["{{base_url}}"],
+              "path": ["boards", "{{board_id}}", "members"]
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/boards/:id/members/:userId",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "x-auth-token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"admin\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/boards/{{board_id}}/members/{{member_user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["boards", "{{board_id}}", "members", "{{member_user_id}}"]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/boards/:id/members/:userId",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "x-auth-token", "value": "{{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/boards/{{board_id}}/members/{{member_user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["boards", "{{board_id}}", "members", "{{member_user_id}}"]
+            }
           }
         }
       ]

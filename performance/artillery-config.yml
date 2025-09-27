@@ -1,0 +1,132 @@
+config:
+  target: 'http://localhost:3000'
+  phases:
+    # Warm-up phase
+    - duration: 30
+      arrivalRate: 5
+      name: "Warm-up"
+    # Ramp-up phase
+    - duration: 60
+      arrivalRate: 10
+      rampTo: 50
+      name: "Ramp-up load"
+    # Sustained load phase
+    - duration: 120
+      arrivalRate: 50
+      name: "Sustained load"
+    # Spike test phase
+    - duration: 30
+      arrivalRate: 100
+      name: "Spike test"
+  processor: "./artillery-functions.js"
+  variables:
+    testUser:
+      - "testuser1@example.com"
+      - "testuser2@example.com"
+      - "testuser3@example.com"
+    testPassword: "TestPassword123!"
+
+scenarios:
+  # Authentication flow
+  - name: "Authentication Flow"
+    weight: 20
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "{{ testUser }}"
+            password: "{{ testPassword }}"
+          capture:
+            - json: "$.data.accessToken"
+              as: "authToken"
+      - get:
+          url: "/api/auth/profile"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+
+  # Task management flow
+  - name: "Task Management"
+    weight: 30
+    flow:
+      - function: "loginUser"
+      - post:
+          url: "/api/tasks"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            title: "Performance test task {{ $randomString() }}"
+            description: "This is a test task for performance testing"
+            priority: "medium"
+            dueDate: "2024-12-31T23:59:59.000Z"
+          capture:
+            - json: "$.data._id"
+              as: "taskId"
+      - get:
+          url: "/api/tasks/{{ taskId }}"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+      - patch:
+          url: "/api/tasks/{{ taskId }}/status"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            status: "in-progress"
+
+  # Board operations flow
+  - name: "Board Operations"
+    weight: 25
+    flow:
+      - function: "loginUser"
+      - post:
+          url: "/api/boards"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            title: "Test Board {{ $randomString() }}"
+            description: "Performance test board"
+            columns:
+              - title: "To Do"
+                position: 0
+                color: "#e74c3c"
+              - title: "In Progress"
+                position: 1
+                color: "#f39c12"
+              - title: "Done"
+                position: 2
+                color: "#27ae60"
+          capture:
+            - json: "$.data._id"
+              as: "boardId"
+      - get:
+          url: "/api/boards/{{ boardId }}"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+      - get:
+          url: "/api/boards"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+
+  # Analytics flow
+  - name: "Analytics Queries"
+    weight: 15
+    flow:
+      - function: "loginUser"
+      - get:
+          url: "/api/analytics/dashboard"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+      - get:
+          url: "/api/analytics/user?period=month"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+
+  # High-frequency operations
+  - name: "Health and Status Checks"
+    weight: 10
+    flow:
+      - get:
+          url: "/api/health"
+      - get:
+          url: "/api/health/status"
+      - get:
+          url: "/api/health/database"

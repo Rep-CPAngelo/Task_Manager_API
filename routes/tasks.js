@@ -15,7 +15,11 @@ const {
   addAttachmentSchema,
   addSubtaskSchema,
   updateSubtaskSchema,
-  subtaskIdParamSchema
+  subtaskIdParamSchema,
+  // Recurring task schemas
+  createRecurringTaskSchema,
+  updateRecurrenceSchema,
+  recurringTaskInstancesQuerySchema
 } = require('../validations/taskSchemas');
 
 // Create task
@@ -50,6 +54,19 @@ router.patch('/:id/subtasks/:subId', auth, validate(subtaskIdParamSchema, 'param
 
 // Activity feed
 router.get('/:id/activity', auth, validate(taskIdParamSchema, 'params'), taskController.getActivity);
+
+// Recurring task routes
+// Create recurring task
+router.post('/recurring', auth, validate(createRecurringTaskSchema), taskController.createRecurringTask);
+
+// Update recurrence settings
+router.patch('/:id/recurrence', auth, validate(taskIdParamSchema, 'params'), validate(updateRecurrenceSchema), taskController.updateRecurrence);
+
+// Get recurring task instances
+router.get('/:id/instances', auth, validate(taskIdParamSchema, 'params'), validate(recurringTaskInstancesQuerySchema, 'query'), taskController.getRecurringTaskInstances);
+
+// Generate due recurring tasks (admin only)
+router.post('/recurring/generate', auth, taskController.generateRecurringTasks);
 
 module.exports = router;
 

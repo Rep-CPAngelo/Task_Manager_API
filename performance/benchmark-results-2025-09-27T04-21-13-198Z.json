@@ -1,0 +1,130 @@
+{
+  "results": [
+    {
+      "operation": "User lookup by email",
+      "iterations": 100,
+      "avgTime": 32.3,
+      "minTime": 25.31,
+      "maxTime": 117.46,
+      "totalTime": 3230.02
+    },
+    {
+      "operation": "User lookup by ID",
+      "iterations": 100,
+      "avgTime": 28.19,
+      "minTime": 24.82,
+      "maxTime": 47.94,
+      "totalTime": 2818.79
+    },
+    {
+      "operation": "User search with regex",
+      "iterations": 50,
+      "avgTime": 29.28,
+      "minTime": 26.01,
+      "maxTime": 45.67,
+      "totalTime": 1464.07
+    },
+    {
+      "operation": "User creation",
+      "iterations": 10,
+      "avgTime": 411.34,
+      "minTime": 383.35,
+      "maxTime": 451.76,
+      "totalTime": 4113.39
+    },
+    {
+      "operation": "Task creation",
+      "iterations": 25,
+      "avgTime": 65.35,
+      "minTime": 55.89,
+      "maxTime": 112.3,
+      "totalTime": 1633.67
+    },
+    {
+      "operation": "Task query with filters",
+      "iterations": 100,
+      "avgTime": 35.92,
+      "minTime": 29.33,
+      "maxTime": 57.65,
+      "totalTime": 3592.48
+    },
+    {
+      "operation": "Task analytics aggregation",
+      "iterations": 50,
+      "avgTime": 34.98,
+      "minTime": 26.56,
+      "maxTime": 263.79,
+      "totalTime": 1749.07
+    },
+    {
+      "operation": "Task text search",
+      "iterations": 50,
+      "avgTime": 37.85,
+      "minTime": 30.22,
+      "maxTime": 59.59,
+      "totalTime": 1892.52
+    },
+    {
+      "operation": "Task status update",
+      "iterations": 50,
+      "avgTime": 39.32,
+      "minTime": 28.95,
+      "maxTime": 77.21,
+      "totalTime": 1966.18
+    },
+    {
+      "operation": "Board creation",
+      "iterations": 10,
+      "avgTime": 74.7,
+      "minTime": 62.63,
+      "maxTime": 125.94,
+      "totalTime": 746.97
+    },
+    {
+      "operation": "Board query with member population",
+      "iterations": 50,
+      "avgTime": 64.26,
+      "minTime": 52.92,
+      "maxTime": 86.65,
+      "totalTime": 3213.14
+    },
+    {
+      "operation": "Board statistics aggregation",
+      "iterations": 25,
+      "avgTime": 29.6,
+      "minTime": 25.8,
+      "maxTime": 52.94,
+      "totalTime": 739.95
+    },
+    {
+      "operation": "Dashboard analytics query",
+      "iterations": 25,
+      "avgTime": 33.96,
+      "minTime": 28.05,
+      "maxTime": 52.67,
+      "totalTime": 849.02
+    },
+    {
+      "operation": "Productivity metrics query",
+      "iterations": 20,
+      "avgTime": 33,
+      "minTime": 27.4,
+      "maxTime": 42.44,
+      "totalTime": 659.92
+    },
+    {
+      "operation": "Cross-collection query (boards with task counts)",
+      "iterations": 20,
+      "avgTime": 31.12,
+      "minTime": 26.79,
+      "maxTime": 45.57,
+      "totalTime": 622.39
+    }
+  ],
+  "summary": {
+    "totalOperations": 685,
+    "totalTime": 29291.58,
+    "avgResponseTime": 42.76143065693431,
+    "opsPerSecond": 23.385559945895714
+  }
+}
